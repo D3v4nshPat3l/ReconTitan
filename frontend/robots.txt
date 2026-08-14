@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /api/
+Disallow: /report.html
+Allow: /
+
+Sitemap: https://recontitan.com/sitemap.xml
