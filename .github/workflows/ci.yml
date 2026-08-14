@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - name: Compile and test
+        env:
+          PYTHONPATH: backend
+          RECONTITAN_DEBUG: "true"
+        run: |
+          python -m compileall -q backend/app
+          pytest -q backend/tests
+      - name: Frontend and deployment syntax
+        run: |
+          node --check frontend/dashboard.js
+          node --check frontend/report.js
+          bash -n deploy.sh
+      - name: Dependency audit
+        run: pip-audit -r backend/requirements.txt
+      - name: Static security scan
+        run: bandit -q -ll -r backend/app -x backend/tests
+      - name: Validate Compose configuration
+        env:
+          DOMAIN: scanner.example.com
+          SECRET_KEY: ci-only-secret-value-that-is-over-thirty-two-chars
+          CORS_ORIGINS: https://scanner.example.com
+          API_ACCESS_KEY: ci-api-access-key-value-over-thirty-two-characters
+          REDIS_PASSWORD: ci-redis-password
+          MONGO_ROOT_USER: recontitan_root
+          MONGO_ROOT_PASS: ci-root-mongo-password
+          MONGO_USER: recontitan_app
+          MONGO_PASS: ci-mongo-password
+          MONGO_AUTH_SOURCE: recontitan
+        run: docker compose config --quiet
