@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#080d0a">
+<title>ReconTitan — Interactive Security Report</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="report.css?v=9">
+<link rel="stylesheet" href="news_extras.css">
+</head>
+<body>
+<!-- TOP BAR -->
+<header class="topbar">
+  <a class="topbar-logo" href="/">◈ RECON<strong>TITAN</strong></a>
+  <div class="topbar-target" id="topbarTarget">—</div>
+  <div class="topbar-actions">
+    <button class="tb-btn primary" id="btnExportPdf">⬇ PROFESSIONAL PDF</button>
+    <button class="tb-btn" id="btnExportJson">⬇ JSON</button>
+    <button class="tb-btn" id="btnExportHtml">⬇ HTML</button>
+    <a class="tb-btn" href="/">← NEW SCAN</a>
+  </div>
+</header>
+
+<!-- SCAN META BAR -->
+<div class="metabar" id="metabar">
+  <span class="meta-item"><span class="meta-lbl">TARGET</span><span class="meta-val" id="metaTarget">—</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item"><span class="meta-lbl">SCAN ID</span><span class="meta-val" id="metaScanId">—</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item"><span class="meta-lbl">PROFILE</span><span class="meta-val" id="metaProfile">FULL</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item"><span class="meta-lbl">FINDINGS</span><span class="meta-val" id="metaFindings">0</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item sev-critical"><span class="meta-lbl">CRITICAL</span><span class="meta-val" id="metaCritical">0</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item sev-high"><span class="meta-lbl">HIGH</span><span class="meta-val" id="metaHigh">0</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item sev-medium"><span class="meta-lbl">MEDIUM</span><span class="meta-val" id="metaMedium">0</span></span>
+  <span class="meta-sep">|</span>
+  <span class="meta-item"><span class="meta-lbl">TIME</span><span class="meta-val" id="metaTime">—</span></span>
+</div>
+
+<!-- SEVERITY SUMMARY BAR -->
+<div class="sev-bar" id="sevBar" style="display:none">
+  <div class="sev-bar-item total"><span class="sev-bar-num" id="sbTotal">0</span><span class="sev-bar-lbl">TOTAL</span></div>
+  <div class="sev-bar-item critical"><span class="sev-bar-num" id="sbCritical">0</span><span class="sev-bar-lbl">CRITICAL</span></div>
+  <div class="sev-bar-item high"><span class="sev-bar-num" id="sbHigh">0</span><span class="sev-bar-lbl">HIGH</span></div>
+  <div class="sev-bar-item medium"><span class="sev-bar-num" id="sbMedium">0</span><span class="sev-bar-lbl">MEDIUM</span></div>
+  <div class="sev-bar-item low"><span class="sev-bar-num" id="sbLow">0</span><span class="sev-bar-lbl">LOW</span></div>
+  <div class="sev-bar-item info"><span class="sev-bar-num" id="sbInfo">0</span><span class="sev-bar-lbl">INFO</span></div>
+</div>
+<div class="loading-state" id="loadingState">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Initializing scan engine...</div>
+  <div class="loading-sub" id="loadingSub">Running security modules with bounded network access</div>
+  <div class="progress-wrap">
+    <div class="progress-bar-outer">
+      <div class="progress-bar-inner" id="progressInner"></div>
+    </div>
+    <span class="progress-pct" id="progressPct">0%</span>
+  </div>
+  <div class="tool-pills" id="toolPills"></div>
+</div>
+
+<!-- DANGER MODE BANNER (rendered above the AI summary) -->
+<div id="dangerBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
+
+<!-- AI SUMMARY BANNER (rendered above masonry grid) -->
+<div id="aiBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
+
+<!-- MAIN REPORT GRID -->
+<main class="report-grid" id="reportGrid" style="display:none">
+  <!-- Cards injected by JS -->
+</main>
+
+<!-- EMPTY STATE -->
+<div class="empty-report" id="emptyReport" style="display:none">
+  <div class="empty-icon">⟐</div>
+  <div class="empty-title">No Scan Data</div>
+  <div class="empty-sub">Run a scan from the <a href="/">Dashboard</a> first.</div>
+</div>
+
+<!-- FINDING DETAIL MODAL -->
+<div class="modal-overlay" id="modal" style="display:none">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <span class="modal-sev" id="modalSev"></span>
+      <h3 id="modalTitle"></h3>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc" id="modalDesc"></p>
+      <div class="modal-block">
+        <div class="modal-lbl">EVIDENCE</div>
+        <pre class="modal-evidence" id="modalEvidence"></pre>
+      </div>
+      <div class="modal-block" id="modalExploitBlock" style="display:none">
+        <div class="modal-lbl">⚡ EXPLOITATION — WHAT WAS PROVEN</div>
+        <div class="modal-exploit" id="modalExploit"></div>
+      </div>
+      <div class="modal-block" id="modalRemBlock" style="display:none">
+        <div class="modal-lbl">REMEDIATION — FULL FIX</div>
+        <pre class="modal-rem" id="modalRem"></pre>
+      </div>
+      <div class="modal-block" id="modalExplainBlock" style="display:none">
+        <div class="modal-explain" id="modalExplain"></div>
+      </div>
+      <div class="modal-block" id="modalCveBlock" style="display:none">
+        <div class="modal-lbl">CVE</div>
+        <a class="modal-cve" id="modalCve" target="_blank"></a>
+      </div>
+      <div class="modal-meta">
+        Tool: <strong id="modalTool"></strong> &nbsp;·&nbsp;
+        Category: <strong id="modalCat"></strong>
+        <span id="modalCvssWrap"> &nbsp;·&nbsp; CVSS: <strong id="modalCvss"></strong></span>
+      </div>
+      <!-- AI Verify -->
+      <div class="modal-ai-row">
+        <button class="modal-ai-btn" id="modalAiBtn">🤖 VERIFY WITH AI</button>
+      </div>
+      <div id="modalAiResult" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script src="report.js?v=9"></script>
+</body>
+</html>
