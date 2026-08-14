@@ -1,0 +1,37 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtual environments ──
+venv/
+env/
+.env/
+.venv/
+
+# ── Tests ──
+test_*.py
+*_test.py
+pytest_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ── Dev tools ──
+.git/
+.gitignore
+*.bat
+*.md
+verify_fix.py
+
+# ── IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
