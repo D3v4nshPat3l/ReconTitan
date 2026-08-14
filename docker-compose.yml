@@ -1,0 +1,244 @@
+# ReconTitan production stack. Populate .env before starting.
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: recontitan-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./frontend:/var/www/frontend:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/log/nginx
+      - /var/run
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: recontitan-redis
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+  mongo:
+    image: mongo:7.0
+    container_name: recontitan-mongo
+    expose:
+      - "27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo/init/01-create-app-user.js:/docker-entrypoint-initdb.d/01-create-app-user.js:ro
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?Set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASS:?Set MONGO_ROOT_PASS in .env}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-recontitan}
+      MONGO_APP_USER: ${MONGO_USER:?Set MONGO_USER in .env}
+      MONGO_APP_PASS: ${MONGO_PASS:?Set MONGO_PASS in .env}
+      MONGO_APP_DB: ${MONGO_DB:-recontitan}
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username '$${MONGO_INITDB_ROOT_USERNAME}' --password '$${MONGO_INITDB_ROOT_PASSWORD}' --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep -q 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recontitan-api
+    expose:
+      - "8000"
+    volumes:
+      - ./frontend:/frontend:ro
+    environment:
+      RECONTITAN_DEBUG: "false"
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      API_ACCESS_KEY: ${API_ACCESS_KEY:?Set API_ACCESS_KEY in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in .env}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-false}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
+      ALLOW_PRIVATE_TARGETS: ${ALLOW_PRIVATE_TARGETS:-false}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES:-2097152}
+      ENABLE_ACTIVE_VULN_TOOLS: ${ENABLE_ACTIVE_VULN_TOOLS:-false}
+      RATE_LIMIT_SCAN: ${RATE_LIMIT_SCAN:-5}
+      RATE_LIMIT_DANGER: ${RATE_LIMIT_DANGER:-2}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_USER: ${MONGO_USER:?Set MONGO_USER in .env}
+      MONGO_PASS: ${MONGO_PASS:?Set MONGO_PASS in .env}
+      MONGO_DB: ${MONGO_DB:-recontitan}
+      TMPDIR: /tmp/recontitan
+      MONGO_AUTH_SOURCE: ${MONGO_AUTH_SOURCE:-recontitan}
+      SCAN_TIMEOUT_NMAP: ${SCAN_TIMEOUT_NMAP:-300}
+      SCAN_TIMEOUT_NUCLEI: ${SCAN_TIMEOUT_NUCLEI:-600}
+      SCAN_TIMEOUT_DEFAULT: ${SCAN_TIMEOUT_DEFAULT:-120}
+      JS_ANALYSIS_MAX_FILES: ${JS_ANALYSIS_MAX_FILES:-20}
+      JS_ANALYSIS_MAX_BYTES: ${JS_ANALYSIS_MAX_BYTES:-1048576}
+      TAKEOVER_MAX_SUBDOMAINS: ${TAKEOVER_MAX_SUBDOMAINS:-150}
+      # Danger Mode stays off unless the operator opts in for an authorized target.
+      ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-false}
+      DANGER_MODE_MAX_TARGETS: ${DANGER_MODE_MAX_TARGETS:-1}
+      DANGER_MAX_HOSTS: ${DANGER_MAX_HOSTS:-5}
+      DANGER_MAX_REQUESTS_TOTAL: ${DANGER_MAX_REQUESTS_TOTAL:-900}
+      DANGER_MAX_REQUESTS_PER_MODULE: ${DANGER_MAX_REQUESTS_PER_MODULE:-120}
+      DANGER_MAX_PAYLOADS_PER_SCAN: ${DANGER_MAX_PAYLOADS_PER_SCAN:-600}
+      DANGER_MAX_ENDPOINTS: ${DANGER_MAX_ENDPOINTS:-25}
+      DANGER_MAX_CRAWL_PAGES: ${DANGER_MAX_CRAWL_PAGES:-12}
+      DANGER_REQUEST_DELAY_MS: ${DANGER_REQUEST_DELAY_MS:-250}
+      DANGER_REQUEST_TIMEOUT: ${DANGER_REQUEST_TIMEOUT:-12}
+      DANGER_TIME_DELAY_SECONDS: ${DANGER_TIME_DELAY_SECONDS:-2}
+      DANGER_SUBDOMAIN_BRUTE_LIMIT: ${DANGER_SUBDOMAIN_BRUTE_LIMIT:-100}
+      DANGER_DIR_BUST_WORDLIST: ${DANGER_DIR_BUST_WORDLIST:-120}
+      DANGER_IDOR_MAX_IDS: ${DANGER_IDOR_MAX_IDS:-10}
+      DANGER_ENABLE_XXE_OOB: ${DANGER_ENABLE_XXE_OOB:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+      CENSYS_API_ID: ${CENSYS_API_ID:-}
+      CENSYS_API_SECRET: ${CENSYS_API_SECRET:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      SECURITYTRAILS_API_KEY: ${SECURITYTRAILS_API_KEY:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
+      INTELX_API_KEY: ${INTELX_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp/recontitan:uid=10001,gid=10001,mode=0700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recontitan-worker
+    environment:
+      RECONTITAN_DEBUG: "false"
+      ALLOW_PRIVATE_TARGETS: ${ALLOW_PRIVATE_TARGETS:-false}
+      ENABLE_ACTIVE_VULN_TOOLS: ${ENABLE_ACTIVE_VULN_TOOLS:-false}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_USER: ${MONGO_USER:?Set MONGO_USER in .env}
+      MONGO_PASS: ${MONGO_PASS:?Set MONGO_PASS in .env}
+      MONGO_DB: ${MONGO_DB:-recontitan}
+      TMPDIR: /tmp/recontitan
+      MONGO_AUTH_SOURCE: ${MONGO_AUTH_SOURCE:-recontitan}
+      SCAN_TIMEOUT_NMAP: ${SCAN_TIMEOUT_NMAP:-300}
+      SCAN_TIMEOUT_NUCLEI: ${SCAN_TIMEOUT_NUCLEI:-600}
+      SCAN_TIMEOUT_DEFAULT: ${SCAN_TIMEOUT_DEFAULT:-120}
+      JS_ANALYSIS_MAX_FILES: ${JS_ANALYSIS_MAX_FILES:-20}
+      JS_ANALYSIS_MAX_BYTES: ${JS_ANALYSIS_MAX_BYTES:-1048576}
+      TAKEOVER_MAX_SUBDOMAINS: ${TAKEOVER_MAX_SUBDOMAINS:-150}
+      # Danger Mode stays off unless the operator opts in for an authorized target.
+      ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-false}
+      DANGER_MODE_MAX_TARGETS: ${DANGER_MODE_MAX_TARGETS:-1}
+      DANGER_MAX_HOSTS: ${DANGER_MAX_HOSTS:-5}
+      DANGER_MAX_REQUESTS_TOTAL: ${DANGER_MAX_REQUESTS_TOTAL:-900}
+      DANGER_MAX_REQUESTS_PER_MODULE: ${DANGER_MAX_REQUESTS_PER_MODULE:-120}
+      DANGER_MAX_PAYLOADS_PER_SCAN: ${DANGER_MAX_PAYLOADS_PER_SCAN:-600}
+      DANGER_MAX_ENDPOINTS: ${DANGER_MAX_ENDPOINTS:-25}
+      DANGER_MAX_CRAWL_PAGES: ${DANGER_MAX_CRAWL_PAGES:-12}
+      DANGER_REQUEST_DELAY_MS: ${DANGER_REQUEST_DELAY_MS:-250}
+      DANGER_REQUEST_TIMEOUT: ${DANGER_REQUEST_TIMEOUT:-12}
+      DANGER_TIME_DELAY_SECONDS: ${DANGER_TIME_DELAY_SECONDS:-2}
+      DANGER_SUBDOMAIN_BRUTE_LIMIT: ${DANGER_SUBDOMAIN_BRUTE_LIMIT:-100}
+      DANGER_DIR_BUST_WORDLIST: ${DANGER_DIR_BUST_WORDLIST:-120}
+      DANGER_IDOR_MAX_IDS: ${DANGER_IDOR_MAX_IDS:-10}
+      DANGER_ENABLE_XXE_OOB: ${DANGER_ENABLE_XXE_OOB:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+      CENSYS_API_ID: ${CENSYS_API_ID:-}
+      CENSYS_API_SECRET: ${CENSYS_API_SECRET:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      SECURITYTRAILS_API_KEY: ${SECURITYTRAILS_API_KEY:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
+      INTELX_API_KEY: ${INTELX_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    command: >
+      celery -A app.celery_app:celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=default,orchestrator,recon,osint,vulnscan,danger
+      --hostname=worker@%h
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp/recontitan:uid=10001,gid=10001,mode=0700
+      - /tmp/sqlmap_rt:uid=10001,gid=10001,mode=0700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  redis_data:
+  mongo_data:
