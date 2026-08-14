@@ -1,0 +1,65 @@
+# ══════════════════════════════════════════
+# ReconTitan — .gitignore
+# ══════════════════════════════════════════
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+venv/
+.venv/
+env/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite3
+
+# Scan artifacts (can be large)
+scan_output/
+temp_scans/
+
+# Node (if frontend ever uses npm)
+node_modules/
+package-lock.json
+
+# Misc
+*.bak
+*.tmp
+project_plan.txt
+Online*.pdf
+
+# Study guides (local only)
+Day1_*.html
+Day1_*.pdf
+ReconTitan_*.html
+ReconTitan_*.pdf
+Mastery_*.html
+*.pdf
