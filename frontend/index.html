@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="theme-color" content="#07110c">
+<title>ReconTitan | External Attack Surface &amp; Web Security</title>
+<meta name="description" content="ReconTitan is a security-hardened external reconnaissance and web assessment platform with PDF reporting, takeover checks, JavaScript analysis, favicon correlation, and technology detection.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dashboard.css?v=9">
+<link rel="stylesheet" href="news_extras.css">
+</head>
+<body>
+<div class="ambient ambient-one"></div>
+<div class="ambient ambient-two"></div>
+
+<header class="topbar">
+  <a class="topbar-left" href="/" aria-label="ReconTitan home">
+    <span class="brand-mark" aria-hidden="true"><span></span></span>
+    <span class="logo-text">RECON<strong>TITAN</strong></span>
+    <span class="version-pill" id="versionPill">v0.4.1</span>
+  </a>
+  <nav class="topbar-nav" aria-label="Primary navigation">
+    <a href="#scanner" class="nav-a active">Scanner</a>
+    <a href="#capabilities" class="nav-a">Capabilities</a>
+    <a href="#history-section" class="nav-a">History</a>
+    <a href="#news-section" class="nav-a">Intel Feed</a>
+    <a href="/api/docs" target="_blank" rel="noopener noreferrer" class="nav-a">API ↗</a>
+  </nav>
+  <div class="topbar-right">
+    <span class="online-dot"></span>
+    <span class="online-label">ENGINE READY</span>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="scanner">
+  <canvas id="heroCanvas" class="hero-canvas" aria-hidden="true"></canvas>
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div class="eyebrow"><span class="eyebrow-dot"></span> AUTHORIZED EXTERNAL SECURITY ASSESSMENT</div>
+    <h1 class="hero-title">Map the attack surface.<br><span>Understand the risk.</span></h1>
+    <p class="hero-sub">One target launches bounded reconnaissance, configuration review, JavaScript inspection, takeover checks, technology fingerprinting, favicon correlation, vulnerability candidates, and a professional PDF report.</p>
+
+    <div class="scan-console">
+      <div class="console-head">
+        <div class="console-lights"><i></i><i></i><i></i></div>
+        <span>recontitan://scan-console</span>
+        <span class="console-secure">SSRF-GUARDED</span>
+      </div>
+      <div class="scan-box">
+        <label class="scan-input-wrap" for="targetInput">
+          <span class="scan-prompt">target://</span>
+          <input id="targetInput" type="text" placeholder="example.com or 1.1.1.1" autocomplete="off" spellcheck="false" aria-label="Public domain or IP address">
+        </label>
+        <button class="scan-btn" id="scanBtn" type="button">
+          <span class="scan-btn-label">START SCAN</span>
+          <span class="scan-btn-loader" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="profile-label">Choose an assessment profile</div>
+      <div class="profile-grid" id="profileGrid" role="radiogroup" aria-label="Scan profile">
+        <button class="profile-card active" type="button" data-profile="full" role="radio" aria-checked="true">
+          <span class="profile-icon">◆</span><span><strong>Full Safe Scan</strong><small>Recon + OSINT + bounded vulnerability checks</small></span>
+        </button>
+        <button class="profile-card" type="button" data-profile="recon_only" role="radio" aria-checked="false">
+          <span class="profile-icon">◎</span><span><strong>Recon Only</strong><small>Domains, DNS, certificates, archives, infrastructure</small></span>
+        </button>
+        <button class="profile-card" type="button" data-profile="osint_only" role="radio" aria-checked="false">
+          <span class="profile-icon">◈</span><span><strong>OSINT &amp; Web</strong><small>Headers, JS, stack, favicon, takeover, TLS</small></span>
+        </button>
+        <button class="profile-card" type="button" data-profile="vuln_only" role="radio" aria-checked="false">
+          <span class="profile-icon">⚡</span><span><strong>Vulnerability Focus</strong><small>Port exposure + technology-led CVE candidates</small></span>
+        </button>
+        <button class="profile-card profile-danger" type="button" data-profile="danger" role="radio" aria-checked="false">
+          <span class="profile-icon">☣</span><span><strong>Danger Mode</strong><small>Full intermediate penetration test simulation — opt-in</small></span>
+        </button>
+      </div>
+
+      <section class="danger-gate" id="dangerGate" hidden aria-labelledby="dangerGateTitle">
+        <h3 class="danger-gate-title" id="dangerGateTitle">☣ Danger Mode — authorized testing only</h3>
+        <p class="danger-gate-lead" id="dangerGateStatus">Danger Mode sends bounded penetration-test simulation traffic: injection probes, directory and traversal fuzzing, identifier enumeration, and DNS zone-transfer attempts.</p>
+        <ul class="danger-gate-list">
+          <li>Nothing on the target is created, modified, or deleted.</li>
+          <li>No credentials are used against live accounts.</li>
+          <li>No reverse shell is ever connected — command-injection vectors are reported only.</li>
+          <li>Secrets, tokens, and object contents are fingerprinted, never stored.</li>
+          <li>Every result is a candidate requiring manual validation.</li>
+          <li><strong>Expect 3–6 minutes.</strong> The scan is capped by a wall-clock limit; if it is hit, remaining stages are skipped and the report is still produced from completed work.</li>
+        </ul>
+        <label class="danger-gate-check">
+          <input type="checkbox" id="dangerConsent">
+          <span>I own this target or hold written permission to assess it, and I accept responsibility for this scan.</span>
+        </label>
+        <label class="danger-gate-type" for="dangerPhrase">
+          Type <code>I am authorized</code> to unlock Danger Mode
+          <input type="text" id="dangerPhrase" autocomplete="off" spellcheck="false" placeholder="I am authorized" aria-describedby="dangerGateFeedback">
+        </label>
+        <p class="danger-gate-feedback" id="dangerGateFeedback" role="status" aria-live="polite">Danger Mode is locked.</p>
+      </section>
+
+      <div class="authorization-note"><strong>Authorization required.</strong> Scan only systems you own or have explicit written permission to assess. Private and non-routable targets are blocked by default.</div>
+    </div>
+
+    <div class="scan-progress" id="scanProgress" hidden>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-meta">
+        <span class="progress-phase" id="progressPhase">Initializing...</span>
+        <span class="progress-pct" id="progressPct">0%</span>
+      </div>
+      <div class="progress-log" id="progressLog" aria-live="polite"></div>
+    </div>
+
+    <div class="hero-stats">
+      <div class="hs"><span class="hs-n" id="moduleCount">20+</span><span class="hs-l">SAFE MODULES</span></div>
+      <div class="hs"><span class="hs-n">5</span><span class="hs-l">ADVANCED UPGRADES</span></div>
+      <div class="hs"><span class="hs-n">3</span><span class="hs-l">HASH FORMATS</span></div>
+      <div class="hs"><span class="hs-n" id="hsScans">0</span><span class="hs-l">LOCAL SCANS</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="feature-strip" aria-label="Security controls">
+  <span>27-category injection screening</span><span>DNS rebinding defense</span><span>bounded downloads</span><span>non-root containers</span><span>production fail-closed</span>
+</section>
+
+<section class="tools-section" id="capabilities">
+  <div class="section-wrap">
+    <div class="section-hdr split-heading">
+      <div><span class="section-tag">// RELEASE 0.4.1</span><h2 class="section-title">Five advanced capabilities, fully integrated</h2></div>
+      <p>Each module is wired into synchronous and queued scan flows, rendered in the report UI, and included in PDF export.</p>
+    </div>
+    <div class="upgrade-grid" id="upgradeGrid">
+      <article class="upgrade-card accent-green"><span class="upgrade-num">01</span><h3>PDF Report Export</h3><p>Severity-ranked, evidence-rich reports with methodology, tool coverage, remediation, and limitations.</p><span class="upgrade-tag">REPORTING</span></article>
+      <article class="upgrade-card accent-orange"><span class="upgrade-num">02</span><h3>Subdomain Takeover</h3><p>Conservative provider CNAME matching with NXDOMAIN and unclaimed-resource fingerprints.</p><span class="upgrade-tag">ATTACK SURFACE</span></article>
+      <article class="upgrade-card accent-cyan"><span class="upgrade-num">03</span><h3>JavaScript Analysis</h3><p>Same-scope asset inspection for redacted secrets, risky sinks, source maps, and API endpoints.</p><span class="upgrade-tag">CLIENT SECURITY</span></article>
+      <article class="upgrade-card accent-violet"><span class="upgrade-num">04</span><h3>Favicon Hash Lookup</h3><p>MD5, SHA-256, and Shodan-compatible MurmurHash3 for related-asset correlation.</p><span class="upgrade-tag">CORRELATION</span></article>
+      <article class="upgrade-card accent-blue"><span class="upgrade-num">05</span><h3>Tech Stack Detection</h3><p>Multi-signal identification from headers, HTML metadata, cookies, and referenced assets.</p><span class="upgrade-tag">FINGERPRINTING</span></article>
+    </div>
+
+    <div class="architecture-preview">
+      <div class="architecture-copy">
+        <span class="section-tag">// HOW IT FLOWS</span>
+        <h3>Browser → hardened API → workers → evidence store → report</h3>
+        <p>Targets are normalized and resolved before any outbound connection. Redirects are revalidated, responses are capped, and intrusive scanners remain explicitly opt-in.</p>
+        <a href="/api/capabilities" class="text-link" target="_blank" rel="noopener noreferrer">View machine-readable capabilities ↗</a>
+      </div>
+      <div class="architecture-nodes" aria-label="Architecture summary">
+        <span>STATIC UI</span><b>→</b><span>FASTAPI</span><b>→</b><span>CELERY</span><b>→</b><span>SCANNERS</span><b>→</b><span>MONGODB</span><b>→</b><span>PDF</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="history-section" id="history-section">
+  <div class="section-wrap">
+    <div class="section-hdr"><span class="section-tag">// RECENT ACTIVITY</span><h2 class="section-title">Local scan history</h2></div>
+    <div class="history-table-wrap">
+      <table class="history-table">
+        <thead><tr><th>TARGET</th><th>PROFILE</th><th>FINDINGS</th><th>CRITICAL</th><th>HIGH</th><th>DATE</th><th></th></tr></thead>
+        <tbody id="historyBody"><tr><td colspan="7" class="history-empty">No scans yet. Enter an authorized public target above.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="news-section" id="news-section">
+  <div class="section-wrap">
+    <div class="section-hdr"><span class="section-tag">// LIVE INTELLIGENCE</span><h2 class="section-title">Cybersecurity feed</h2><div class="feed-badges"><span class="live-badge"><span class="live-dot"></span> LIVE</span></div></div>
+    <div class="news-cats">
+      <button class="ncat active" data-cat="all">ALL</button><button class="ncat" data-cat="threats">THREATS</button><button class="ncat" data-cat="vulns">VULNS</button><button class="ncat" data-cat="osint">OSINT</button><button class="ncat" data-cat="malware">MALWARE</button><button class="ncat" data-cat="breaches">BREACHES</button>
+    </div>
+    <div class="news-grid" id="newsGrid"></div>
+  </div>
+</section>
+</main>
+
+<footer class="footer">
+  <span>RECONTITAN © 2026 — Authorized testing only.</span>
+  <span><a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">OWASP Top 10</a> · <a href="https://github.com/D3v4nshPat3l" target="_blank" rel="noopener noreferrer">GitHub</a> · <a href="/api/health">Health</a></span>
+</footer>
+<script src="dashboard.js?v=9"></script>
+</body>
+</html>
