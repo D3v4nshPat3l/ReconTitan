@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 620" width="1180" height="620" role="img" aria-label="Danger Mode pipeline: gate, recon, attack surface, testing modules, exploitation engine and report">
+  <defs>
+    <linearGradient id="dbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d0707"/><stop offset="100%" stop-color="#150d0d"/>
+    </linearGradient>
+    <marker id="da" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f87171"/>
+    </marker>
+    <marker id="dg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#a3e635"/>
+    </marker>
+  </defs>
+  <style>
+    .t{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;fill:#fca5a5}
+    .h{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2.2px;fill:#c9a0a0}
+    .n{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;fill:#f4e6e6}
+    .s{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:10px;fill:#a98a8a}
+    .g{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:10px;fill:#8fae97}
+    .stage{fill:#1a1010;stroke:#4a2626;stroke-width:1.2;rx:9}
+    .safe{fill:#0f1a12;stroke:#2f4a33;stroke-width:1.2;rx:9}
+    .f{stroke:#f87171;stroke-width:1.6;fill:none;marker-end:url(#da)}
+    .fg{stroke:#a3e635;stroke-width:1.6;fill:none;marker-end:url(#dg)}
+  </style>
+
+  <rect width="1180" height="620" fill="url(#dbg)"/>
+  <text x="40" y="46" class="t">☣ DANGER MODE PIPELINE</text>
+  <line x1="40" y1="60" x2="1140" y2="60" stroke="#4a2626"/>
+
+  <!-- Gate -->
+  <text x="40" y="92" class="h">TWO-LOCK GATE — BOTH REQUIRED</text>
+  <rect x="40" y="104" width="250" height="66" class="stage" stroke="#f87171"/>
+  <text x="60" y="130" class="n">1 · ALLOW_DANGER_MODE=true</text>
+  <text x="60" y="150" class="s">Environment opt-in, default false</text>
+
+  <rect x="310" y="104" width="250" height="66" class="stage" stroke="#f87171"/>
+  <text x="330" y="130" class="n">2 · "I am authorized"</text>
+  <text x="330" y="150" class="s">Typed, constant-time compared</text>
+
+  <rect x="580" y="104" width="270" height="66" class="safe"/>
+  <text x="600" y="130" class="n">Re-checked in the worker</text>
+  <text x="600" y="150" class="g">A queued scan cannot run once disabled</text>
+
+  <rect x="870" y="104" width="270" height="66" class="safe"/>
+  <text x="890" y="130" class="n">Bounded budget starts</text>
+  <text x="890" y="150" class="g">Requests · payloads · wall clock</text>
+
+  <!-- Stage 1 -->
+  <text x="40" y="212" class="h">DISCOVERY</text>
+  <rect x="40" y="224" width="250" height="72" class="stage"/>
+  <text x="60" y="250" class="n">danger_recon</text>
+  <text x="60" y="270" class="s">Passive + brute subdomains</text>
+  <text x="60" y="286" class="s">Live host fingerprinting</text>
+
+  <rect x="310" y="224" width="250" height="72" class="stage"/>
+  <text x="330" y="250" class="n">danger_axfr</text>
+  <text x="330" y="270" class="s">Full record enumeration</text>
+  <text x="330" y="286" class="s">Zone transfer attempt per NS</text>
+
+  <rect x="580" y="224" width="560" height="72" class="stage" stroke="#f87171"/>
+  <text x="600" y="250" class="n">attack_surface — the contract every later module consumes</text>
+  <text x="600" y="270" class="s">Crawls in-scope pages · classifies every form, search field, query param,</text>
+  <text x="600" y="286" class="s">API endpoint, upload and object reference into a typed inventory</text>
+
+  <!-- Stage 2 -->
+  <text x="40" y="338" class="h">BOUNDED TESTING</text>
+  <rect x="40" y="350" width="265" height="112" class="stage"/>
+  <text x="60" y="376" class="n">Injection (8 classes)</text>
+  <text x="60" y="396" class="s">SQL · command · HTML · XSS</text>
+  <text x="60" y="412" class="s">SSTI · XXE · SSRF · NoSQL</text>
+  <text x="60" y="428" class="s">WAF-evasion payload variants</text>
+  <text x="60" y="446" class="s">Per-DBMS error signatures</text>
+
+  <rect x="325" y="350" width="265" height="112" class="stage"/>
+  <text x="345" y="376" class="n">Client side</text>
+  <text x="345" y="396" class="s">DOM source → sink dataflow</text>
+  <text x="345" y="412" class="s">Prototype pollution gadgets</text>
+  <text x="345" y="428" class="s">DOM clobbering surface</text>
+  <text x="345" y="446" class="s">postMessage origin checks</text>
+
+  <rect x="610" y="350" width="265" height="112" class="stage"/>
+  <text x="630" y="376" class="n">Access &amp; logic</text>
+  <text x="630" y="396" class="s">IDOR differential enumeration</text>
+  <text x="630" y="412" class="s">Numeric domain validation</text>
+  <text x="630" y="428" class="s">Mass assignment · workflow</text>
+  <text x="630" y="446" class="s">One-time value replay</text>
+
+  <rect x="895" y="350" width="245" height="112" class="stage"/>
+  <text x="915" y="376" class="n">Exposure &amp; config</text>
+  <text x="915" y="396" class="s">Record counts · PII classes</text>
+  <text x="915" y="412" class="s">Directory · traversal · CORS</text>
+  <text x="915" y="428" class="s">Open redirect · GraphQL · JWT</text>
+  <text x="915" y="446" class="s">CRLF · Host header</text>
+
+  <!-- Stage 3 -->
+  <text x="40" y="504" class="h">EXPLOITATION ENGINE — PROOF, NOT EXTRACTION</text>
+  <rect x="40" y="516" width="700" height="76" class="stage" stroke="#f87171" stroke-width="1.8"/>
+  <text x="60" y="542" class="n">Confirms with a captured proof value</text>
+  <text x="60" y="562" class="s">Boolean differential → DB version banner  ·  shell arithmetic → OS name  ·  template</text>
+  <text x="60" y="578" class="s">arithmetic → engine family  ·  reflection context → surviving characters</text>
+
+  <rect x="760" y="516" width="380" height="76" class="safe"/>
+  <text x="780" y="542" class="n">Never extracted</text>
+  <text x="780" y="562" class="g">No rows, records, credentials or personal data.</text>
+  <text x="780" y="578" class="g">No shell connected. No data written or deleted.</text>
+
+  <!-- flows -->
+  <path class="f" d="M290 137 H306"/>
+  <path class="fg" d="M560 137 H576"/>
+  <path class="fg" d="M850 137 H866"/>
+  <path class="f" d="M1005 170 V196 H165 V220"/>
+  <path class="f" d="M290 260 H306"/>
+  <path class="f" d="M560 260 H576"/>
+  <path class="f" d="M860 296 V322 H172 V346"/>
+  <path class="f" d="M172 462 V488 H390 V512"/>
+  <path class="f" d="M457 462 V488 H390 V512"/>
+  <path class="f" d="M742 462 V488 H390 V512"/>
+  <path class="f" d="M1017 462 V488 H390 V512"/>
+</svg>

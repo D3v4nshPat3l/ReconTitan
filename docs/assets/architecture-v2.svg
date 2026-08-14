@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 560" width="1180" height="560" role="img" aria-label="ReconTitan architecture: browser through hardened API, Celery workers, scanner modules, MongoDB and PDF reporting">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#060d08"/><stop offset="100%" stop-color="#0a1710"/>
+    </linearGradient>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#65a30d"/>
+    </marker>
+    <marker id="arc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f87171"/>
+    </marker>
+  </defs>
+  <style>
+    .lbl{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;font-weight:700;fill:#e7f2e9}
+    .sub{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:10.5px;fill:#7f9887}
+    .hd{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:2.2px;fill:#8fae97}
+    .tt{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;fill:#a3e635}
+    .box{fill:#0d1b12;stroke:#274032;stroke-width:1.2;rx:10}
+    .flow{stroke:#65a30d;stroke-width:1.7;fill:none;marker-end:url(#ar)}
+    .flowc{stroke:#22d3ee;stroke-width:1.7;fill:none;marker-end:url(#arc)}
+    .flowr{stroke:#f87171;stroke-width:1.7;fill:none;marker-end:url(#arr)}
+  </style>
+
+  <rect width="1180" height="560" fill="url(#bg2)"/>
+  <text x="40" y="46" class="tt">ARCHITECTURE</text>
+  <line x1="40" y1="60" x2="1140" y2="60" stroke="#274032" stroke-width="1"/>
+
+  <!-- Layer 1: client -->
+  <text x="40" y="92" class="hd">CLIENT</text>
+  <rect x="40" y="104" width="200" height="76" class="box"/>
+  <text x="60" y="132" class="lbl">Static Dashboard</text>
+  <text x="60" y="152" class="sub">No inline script · CSP enforced</text>
+  <text x="60" y="168" class="sub">Danger gate · live telemetry</text>
+
+  <!-- Layer 2: edge -->
+  <text x="300" y="92" class="hd">EDGE</text>
+  <rect x="300" y="104" width="200" height="76" class="box"/>
+  <text x="320" y="132" class="lbl">Nginx</text>
+  <text x="320" y="152" class="sub">TLS · security headers</text>
+  <text x="320" y="168" class="sub">Per-zone rate limits</text>
+
+  <!-- Layer 3: API -->
+  <text x="560" y="92" class="hd">APPLICATION</text>
+  <rect x="560" y="104" width="230" height="76" class="box" stroke="#3f6212"/>
+  <text x="580" y="132" class="lbl">FastAPI + SecurityMiddleware</text>
+  <text x="580" y="152" class="sub">27-category injection screen</text>
+  <text x="580" y="168" class="sub">API key · SSRF guard · limits</text>
+
+  <!-- Layer 4: queue -->
+  <text x="850" y="92" class="hd">QUEUE</text>
+  <rect x="850" y="104" width="290" height="76" class="box"/>
+  <text x="870" y="132" class="lbl">Celery + Redis</text>
+  <text x="870" y="152" class="sub">Queues: recon · osint · vulnscan</text>
+  <text x="870" y="168" class="sub">danger · orchestrator</text>
+
+  <!-- Scanner modules -->
+  <text x="40" y="238" class="hd">SCANNER MODULES</text>
+  <rect x="40" y="250" width="340" height="128" class="box"/>
+  <text x="60" y="278" class="lbl">Recon &amp; OSINT</text>
+  <text x="60" y="300" class="sub">WHOIS · DNS · crt.sh · Wayback · httpx</text>
+  <text x="60" y="318" class="sub">Headers · TLS · CORS · cookies · WAF</text>
+  <text x="60" y="336" class="sub">Tech stack · favicon · JS analysis</text>
+  <text x="60" y="354" class="sub">Subdomain takeover · threat intel</text>
+
+  <rect x="400" y="250" width="340" height="128" class="box"/>
+  <text x="420" y="278" class="lbl">Vulnerability</text>
+  <text x="420" y="300" class="sub">Port exposure · NVD CVE candidates</text>
+  <text x="420" y="318" class="sub">Optional: nuclei · nikto · ffuf · sqlmap</text>
+  <text x="420" y="336" class="sub">Version fingerprint matching</text>
+  <text x="420" y="354" class="sub">Opt-in only, never default</text>
+
+  <rect x="760" y="250" width="380" height="128" class="box" stroke="#7f2d2d"/>
+  <text x="780" y="278" class="lbl" fill="#fca5a5">Danger Mode  ☣  opt-in</text>
+  <text x="780" y="300" class="sub">AXFR · attack surface · 8 injection classes</text>
+  <text x="780" y="318" class="sub">DOM dataflow · business logic · IDOR</text>
+  <text x="780" y="336" class="sub">Data exposure · traversal · advanced</text>
+  <text x="780" y="354" class="sub">Exploitation engine → confirmed proof</text>
+
+  <!-- Storage & output -->
+  <text x="40" y="428" class="hd">EVIDENCE &amp; OUTPUT</text>
+  <rect x="40" y="440" width="240" height="76" class="box"/>
+  <text x="60" y="468" class="lbl">MongoDB</text>
+  <text x="60" y="488" class="sub">Findings · danger summary</text>
+  <text x="60" y="504" class="sub">Least-privileged app user</text>
+
+  <rect x="310" y="440" width="240" height="76" class="box"/>
+  <text x="330" y="468" class="lbl">AI Analysis</text>
+  <text x="330" y="488" class="sub">Executive summary</text>
+  <text x="330" y="504" class="sub">Per-finding explanation</text>
+
+  <rect x="580" y="440" width="270" height="76" class="box"/>
+  <text x="600" y="468" class="lbl">Interactive Report</text>
+  <text x="600" y="488" class="sub">Masonry cards · exploit panel</text>
+  <text x="600" y="504" class="sub">JSON / HTML export</text>
+
+  <rect x="880" y="440" width="260" height="76" class="box"/>
+  <text x="900" y="468" class="lbl">PDF Report</text>
+  <text x="900" y="488" class="sub">Severity index · OWASP matrix</text>
+  <text x="900" y="504" class="sub">Full code-level remediation</text>
+
+  <!-- flows -->
+  <path class="flow" d="M240 142 H296"/>
+  <path class="flow" d="M500 142 H556"/>
+  <path class="flow" d="M790 142 H846"/>
+  <path class="flowc" d="M995 180 V214 H210 V246"/>
+  <path class="flowc" d="M995 180 V214 H570 V246"/>
+  <path class="flowr" d="M995 180 V214 H950 V246"/>
+  <path class="flow" d="M210 378 V410 H160 V436"/>
+  <path class="flow" d="M570 378 V410 H430 V436"/>
+  <path class="flowr" d="M950 378 V410 H715 V436"/>
+  <path class="flow" d="M280 478 H306"/>
+  <path class="flow" d="M550 478 H576"/>
+  <path class="flow" d="M850 478 H876"/>
+
+  <!-- legend -->
+  <g transform="translate(40 534)">
+    <line x1="0" y1="-4" x2="26" y2="-4" stroke="#65a30d" stroke-width="1.7"/>
+    <text x="34" y="0" class="sub">safe path</text>
+    <line x1="120" y1="-4" x2="146" y2="-4" stroke="#22d3ee" stroke-width="1.7"/>
+    <text x="154" y="0" class="sub">dispatch</text>
+    <line x1="240" y1="-4" x2="266" y2="-4" stroke="#f87171" stroke-width="1.7"/>
+    <text x="274" y="0" class="sub">danger path (requires ALLOW_DANGER_MODE + typed acknowledgement)</text>
+  </g>
+</svg>

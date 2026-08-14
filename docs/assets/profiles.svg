@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 400" width="1180" height="400" role="img" aria-label="ReconTitan scan profiles: recon only, OSINT and web, vulnerability focus, full safe scan, and Danger Mode">
+  <defs>
+    <linearGradient id="pbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#060d08"/><stop offset="100%" stop-color="#0a1710"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .t{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:22px;font-weight:800;letter-spacing:3px;fill:#a3e635}
+    .n{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;fill:#e7f2e9}
+    .k{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:10.5px;letter-spacing:1.4px;fill:#7f9887}
+    .s{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:10.5px;fill:#8fae97}
+    .m{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;font-weight:800;fill:#d9f99d}
+    .ml{font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:9px;letter-spacing:1.6px;fill:#6d8574}
+    .card{fill:#0d1b12;stroke:#274032;stroke-width:1.2;rx:12}
+  </style>
+  <rect width="1180" height="400" fill="url(#pbg)"/>
+  <text x="40" y="46" class="t">SCAN PROFILES</text>
+  <line x1="40" y1="60" x2="1140" y2="60" stroke="#274032"/>
+
+  <!-- recon -->
+  <rect x="40" y="86" width="210" height="270" class="card"/>
+  <text x="62" y="122" font-size="20" fill="#a3e635">◎</text>
+  <text x="62" y="152" class="n">Recon Only</text>
+  <text x="62" y="172" class="k">recon_only</text>
+  <line x1="62" y1="186" x2="228" y2="186" stroke="#274032"/>
+  <text x="62" y="208" class="s">WHOIS · DNS · crt.sh</text>
+  <text x="62" y="226" class="s">Wayback · IP intel</text>
+  <text x="62" y="244" class="s">HTTP probe</text>
+  <text x="62" y="262" class="s">Passive subdomains</text>
+  <text x="62" y="312" class="m">9</text>
+  <text x="62" y="330" class="ml">TOOLS · ~45 s</text>
+
+  <!-- osint -->
+  <rect x="268" y="86" width="210" height="270" class="card"/>
+  <text x="290" y="122" font-size="20" fill="#22d3ee">◈</text>
+  <text x="290" y="152" class="n">OSINT &amp; Web</text>
+  <text x="290" y="172" class="k">osint_only</text>
+  <line x1="290" y1="186" x2="456" y2="186" stroke="#274032"/>
+  <text x="290" y="208" class="s">Headers · TLS · CORS</text>
+  <text x="290" y="226" class="s">Cookies · WAF · robots</text>
+  <text x="290" y="244" class="s">Tech stack · favicon</text>
+  <text x="290" y="262" class="s">JS analysis · takeover</text>
+  <text x="290" y="312" class="m">16</text>
+  <text x="290" y="330" class="ml">TOOLS · ~16 s</text>
+
+  <!-- vuln -->
+  <rect x="496" y="86" width="210" height="270" class="card"/>
+  <text x="518" y="122" font-size="20" fill="#facc15">⚡</text>
+  <text x="518" y="152" class="n">Vulnerability</text>
+  <text x="518" y="172" class="k">vuln_only</text>
+  <line x1="518" y1="186" x2="684" y2="186" stroke="#274032"/>
+  <text x="518" y="208" class="s">Port exposure</text>
+  <text x="518" y="226" class="s">NVD CVE candidates</text>
+  <text x="518" y="244" class="s">Version fingerprints</text>
+  <text x="518" y="262" class="s">Optional active tools</text>
+  <text x="518" y="312" class="m">7</text>
+  <text x="518" y="330" class="ml">TOOLS · ~3 s</text>
+
+  <!-- full -->
+  <rect x="724" y="86" width="210" height="270" class="card" stroke="#3f6212"/>
+  <text x="746" y="122" font-size="20" fill="#a3e635">◆</text>
+  <text x="746" y="152" class="n">Full Safe Scan</text>
+  <text x="746" y="172" class="k">full</text>
+  <line x1="746" y1="186" x2="912" y2="186" stroke="#274032"/>
+  <text x="746" y="208" class="s">Recon + OSINT + vuln</text>
+  <text x="746" y="226" class="s">AI executive summary</text>
+  <text x="746" y="244" class="s">Per-finding explanation</text>
+  <text x="746" y="262" class="s">Non-intrusive throughout</text>
+  <text x="746" y="312" class="m">31</text>
+  <text x="746" y="330" class="ml">TOOLS · ~84 s</text>
+
+  <!-- danger -->
+  <rect x="952" y="86" width="188" height="270" class="card" fill="#1a1010" stroke="#7f2d2d" stroke-width="1.6"/>
+  <text x="974" y="122" font-size="20" fill="#f87171">☣</text>
+  <text x="974" y="152" class="n" fill="#fca5a5">Danger Mode</text>
+  <text x="974" y="172" class="k" fill="#c9a0a0">danger · opt-in</text>
+  <line x1="974" y1="186" x2="1118" y2="186" stroke="#4a2626"/>
+  <text x="974" y="208" class="s" fill="#a98a8a">Everything above, plus</text>
+  <text x="974" y="226" class="s" fill="#a98a8a">OWASP Top 10 testing</text>
+  <text x="974" y="244" class="s" fill="#a98a8a">DOM · logic · exposure</text>
+  <text x="974" y="262" class="s" fill="#a98a8a">Confirmed exploitation</text>
+  <text x="974" y="312" class="m" fill="#fca5a5">50</text>
+  <text x="974" y="330" class="ml" fill="#a98a8a">TOOLS · 3-6 min</text>
+</svg>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720" viewBox="0 0 1600 720" role="img" aria-labelledby="title desc">
+<title id="title">ReconTitan security assessment platform</title><desc id="desc">Dark green product banner showing the ReconTitan workflow and five advanced capabilities.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#040806"/><stop offset=".55" stop-color="#0b1710"/><stop offset="1" stop-color="#06110d"/></linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#d9f99d"/><stop offset=".45" stop-color="#a3e635"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+  <filter id="glow"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#a3e635" stroke-opacity=".055"/></pattern>
+</defs>
+<rect width="1600" height="720" rx="34" fill="url(#bg)"/><rect width="1600" height="720" rx="34" fill="url(#grid)"/>
+<circle cx="1320" cy="120" r="280" fill="#22d3ee" opacity=".035"/><circle cx="200" cy="650" r="310" fill="#65a30d" opacity=".08"/>
+<g transform="translate(105 100)">
+  <g transform="translate(10 8) rotate(45 24 24)"><rect x="4" y="4" width="40" height="40" fill="none" stroke="#a3e635" stroke-width="2"/><rect x="18" y="18" width="12" height="12" fill="#a3e635" filter="url(#glow)"/></g>
+  <text x="82" y="45" fill="#edf7ef" font-family="Arial, sans-serif" font-size="38" font-weight="700" letter-spacing="5">RECON<tspan fill="#a3e635">TITAN</tspan></text>
+  <rect y="88" width="330" height="34" rx="17" fill="#a3e635" fill-opacity=".07" stroke="#a3e635" stroke-opacity=".25"/><circle cx="20" cy="105" r="4" fill="#a3e635"/><text x="34" y="111" fill="#b8d994" font-family="monospace" font-size="14" letter-spacing="1.5">AUTHORIZED SECURITY ASSESSMENT</text>
+  <text y="205" fill="#f4fbf5" font-family="Arial, sans-serif" font-size="70" font-weight="700">Map the attack surface.</text>
+  <text y="284" fill="url(#accent)" font-family="Arial, sans-serif" font-size="70" font-weight="700">Understand the risk.</text>
+  <text y="340" fill="#91a49a" font-family="monospace" font-size="20">Recon • OSINT • Web analysis • Vulnerability candidates • PDF reporting</text>
+</g>
+<g transform="translate(105 510)" font-family="monospace">
+  <g><rect width="250" height="105" rx="16" fill="#0d1812" stroke="#a3e635" stroke-opacity=".28"/><text x="22" y="32" fill="#a3e635" font-size="13">01 / REPORTING</text><text x="22" y="61" fill="#e7f2e9" font-size="18" font-weight="700">PDF Export</text><text x="22" y="84" fill="#73877b" font-size="12">Evidence + remediation</text></g>
+  <g transform="translate(270)"><rect width="250" height="105" rx="16" fill="#0d1812" stroke="#fb923c" stroke-opacity=".28"/><text x="22" y="32" fill="#fb923c" font-size="13">02 / DNS</text><text x="22" y="61" fill="#e7f2e9" font-size="18" font-weight="700">Takeover Checks</text><text x="22" y="84" fill="#73877b" font-size="12">Conservative evidence</text></g>
+  <g transform="translate(540)"><rect width="250" height="105" rx="16" fill="#0d1812" stroke="#22d3ee" stroke-opacity=".28"/><text x="22" y="32" fill="#22d3ee" font-size="13">03 / CLIENT</text><text x="22" y="61" fill="#e7f2e9" font-size="18" font-weight="700">JS Analysis</text><text x="22" y="84" fill="#73877b" font-size="12">Secrets + risky sinks</text></g>
+  <g transform="translate(810)"><rect width="250" height="105" rx="16" fill="#0d1812" stroke="#c084fc" stroke-opacity=".28"/><text x="22" y="32" fill="#c084fc" font-size="13">04 / CORRELATION</text><text x="22" y="61" fill="#e7f2e9" font-size="18" font-weight="700">Favicon Hash</text><text x="22" y="84" fill="#73877b" font-size="12">MD5 + SHA-256 + mmh3</text></g>
+  <g transform="translate(1080)"><rect width="250" height="105" rx="16" fill="#0d1812" stroke="#60a5fa" stroke-opacity=".28"/><text x="22" y="32" fill="#60a5fa" font-size="13">05 / STACK</text><text x="22" y="61" fill="#e7f2e9" font-size="18" font-weight="700">Tech Detection</text><text x="22" y="84" fill="#73877b" font-size="12">Multi-signal fingerprints</text></g>
+</g>
+</svg>

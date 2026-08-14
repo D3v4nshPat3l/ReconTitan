@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="ReconTitan - External attack surface, OSINT and penetration test simulation platform">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#050b07"/>
+      <stop offset="55%" stop-color="#08150e"/>
+      <stop offset="100%" stop-color="#0a1a10"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#d9f99d"/>
+      <stop offset="45%" stop-color="#a3e635"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a3e635" stop-opacity="0"/>
+      <stop offset="30%" stop-color="#a3e635" stop-opacity=".9"/>
+      <stop offset="70%" stop-color="#22d3ee" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#a3e635" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="#a3e635" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity=".16"/>
+      <stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#a3e635" stroke-opacity=".055" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="340" fill="url(#bg)"/>
+  <rect width="1200" height="340" fill="url(#grid)"/>
+  <ellipse cx="215" cy="90" rx="330" ry="200" fill="url(#glowA)"/>
+  <ellipse cx="1010" cy="270" rx="320" ry="190" fill="url(#glowB)"/>
+
+  <!-- node constellation -->
+  <g stroke="#a3e635" stroke-opacity=".2" stroke-width="1" fill="none">
+    <path d="M92 250 L168 206 L246 236 L318 190 L392 214"/>
+    <path d="M900 96 L972 128 L1044 92 L1116 124"/>
+    <path d="M168 206 L182 132 L246 236"/>
+  </g>
+  <g fill="#a3e635" fill-opacity=".55">
+    <circle cx="92" cy="250" r="2.6"/><circle cx="168" cy="206" r="3.2"/>
+    <circle cx="246" cy="236" r="2.6"/><circle cx="318" cy="190" r="3"/>
+    <circle cx="392" cy="214" r="2.4"/><circle cx="182" cy="132" r="2.4"/>
+  </g>
+  <g fill="#22d3ee" fill-opacity=".5">
+    <circle cx="900" cy="96" r="2.6"/><circle cx="972" cy="128" r="3.2"/>
+    <circle cx="1044" cy="92" r="2.6"/><circle cx="1116" cy="124" r="2.4"/>
+  </g>
+
+  <!-- emblem -->
+  <g transform="translate(600 96)">
+    <g transform="rotate(45)">
+      <rect x="-26" y="-26" width="52" height="52" fill="none" stroke="#a3e635" stroke-width="2" rx="4"/>
+      <rect x="-11" y="-11" width="22" height="22" fill="#a3e635" rx="2"/>
+    </g>
+  </g>
+
+  <text x="600" y="196" text-anchor="middle" font-family="'Segoe UI',Helvetica,Arial,sans-serif"
+        font-size="62" font-weight="800" letter-spacing="6" fill="url(#title)">RECONTITAN</text>
+
+  <rect x="330" y="216" width="540" height="1.6" fill="url(#rule)"/>
+
+  <text x="600" y="252" text-anchor="middle" font-family="'Segoe UI',Helvetica,Arial,sans-serif"
+        font-size="16.5" letter-spacing="3.4" fill="#8fae97">
+    EXTERNAL ATTACK SURFACE   ·   OSINT   ·   PENETRATION TEST SIMULATION
+  </text>
+
+  <!-- capability chips -->
+  <g font-family="'Segoe UI',Helvetica,Arial,sans-serif" font-size="12.5" letter-spacing="1.6">
+    <g transform="translate(272 282)">
+      <rect width="150" height="30" rx="15" fill="#a3e635" fill-opacity=".08" stroke="#a3e635" stroke-opacity=".3"/>
+      <text x="75" y="19.5" text-anchor="middle" fill="#b6d98f">50 MODULES</text>
+    </g>
+    <g transform="translate(436 282)">
+      <rect width="176" height="30" rx="15" fill="#a3e635" fill-opacity=".08" stroke="#a3e635" stroke-opacity=".3"/>
+      <text x="88" y="19.5" text-anchor="middle" fill="#b6d98f">OWASP TOP 10 2021</text>
+    </g>
+    <g transform="translate(626 282)">
+      <rect width="186" height="30" rx="15" fill="#f87171" fill-opacity=".1" stroke="#f87171" stroke-opacity=".38"/>
+      <text x="93" y="19.5" text-anchor="middle" fill="#f2a9a9">CONFIRMED EXPLOITATION</text>
+    </g>
+    <g transform="translate(826 282)">
+      <rect width="152" height="30" rx="15" fill="#22d3ee" fill-opacity=".08" stroke="#22d3ee" stroke-opacity=".3"/>
+      <text x="76" y="19.5" text-anchor="middle" fill="#8fd6e4">PDF REPORTING</text>
+    </g>
+  </g>
+</svg>
