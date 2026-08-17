@@ -21,6 +21,14 @@ All notable ReconTitan changes are documented here.
 
 - `safe_request` now accepts bounded `POST` with a body, keeping destination pinning, redirect revalidation, and response-size limits; redirects drop the body per browser convention.
 - Celery routes `run_danger_scan` to a dedicated `danger` queue, and the Compose worker consumes it.
+- Recon and OSINT tools run concurrently (`SCAN_TOOL_CONCURRENCY`, default 8). They are independent and network-bound, so a phase previously cost the sum of every tool's timeout. Danger stages still run sequentially because each feeds the next.
+- `safe_request` reuses keep-alive connections per pinned destination (`HTTP_POOL_MAX_IDLE`) and caches validated DNS resolutions briefly (`DNS_CACHE_TTL_SECONDS`). Repeat requests to one host measured 16x faster; an `example.com` danger scan went from 253s to 65s for identical work. Pool keys include the resolved address and the hostname used for SNI and certificate verification, so a reused connection is always the destination that was validated.
+
+### Fixed
+
+- **Danger Mode never completed on Linux/Docker deployments.** `orchestrate_scan` runs every phase inline in one Celery task, but that task inherited the *per-tool* `task_time_limit` of 900s while the danger profile's worst case is roughly 3400s. The worker hard-killed the scan partway through — frequently during recon or OSINT, before any danger stage ran. Because a signal kill bypasses the `except` block, the scan was left at `status: running` with no error. The orchestrator now gets its own ceiling derived from the phase budgets, and a soft-limit handler records the failure so a stopped scan reports why instead of hanging. This did not reproduce on Windows dev boxes, which use the synchronous `/api/test-scan` path and never involve Celery.
+- A scan stopped by the time limit is no longer redelivered to another worker, which previously could restart the full scan against the target indefinitely.
+- `DANGER_MAX_SCAN_SECONDS` is now passed to the `api` and `worker` services. It was documented in `.env.example` but never wired into Compose, so setting it had no effect on Linux and the danger phase was pinned to the 240s default.
 
 ### Security
 
