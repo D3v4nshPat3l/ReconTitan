@@ -123,6 +123,29 @@ def test_compose_passes_every_danger_setting_the_env_sample_documents():
     assert not missing, f"documented but never passed to the containers: {missing}"
 
 
+def test_deploy_script_writes_the_danger_gate_into_env():
+    """deploy.sh generated a .env with no ALLOW_DANGER_MODE line at all.
+
+    The gate then fell back to its false default, so Danger Mode was disabled
+    on every fresh production deploy with no indication why.
+    """
+    deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
+    assert "ALLOW_DANGER_MODE=" in deploy
+
+
+def test_deploy_script_defaults_danger_mode_off():
+    """Present and documented, but never enabled without a deliberate choice."""
+    deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
+    assert "ALLOW_DANGER_MODE=false" in deploy
+    assert "ALLOW_DANGER_MODE=true" not in deploy
+
+
+def test_deploy_script_preserves_an_existing_env():
+    """Re-running deploy.sh used to silently overwrite a tuned .env."""
+    deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
+    assert ".env.bak" in deploy
+
+
 def test_compose_wires_danger_settings_into_both_api_and_worker():
     compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
     # The worker actually runs the scan; the API serves the bounds to the UI.

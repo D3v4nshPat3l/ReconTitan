@@ -50,6 +50,11 @@ ufw allow 80/tcp comment HTTP
 ufw allow 443/tcp comment HTTPS
 ufw --force enable
 
+if [[ -f .env ]]; then
+    warn "An existing .env was found; keeping it as .env.bak before regenerating"
+    cp -a .env ".env.bak.$(date +%Y%m%d%H%M%S)"
+fi
+
 log "Generating production secrets"
 SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 API_ACCESS_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
@@ -80,6 +85,20 @@ MONGO_DB=recontitan
 MONGO_USER=recontitan_app
 MONGO_PASS=$MONGO_PASS
 MONGO_AUTH_SOURCE=recontitan
+
+# Danger Mode. Left disabled deliberately: it sends bounded penetration-test
+# simulation traffic and must be a conscious decision per deployment. Set to
+# true ONLY for targets you own or hold written authorization to assess, then
+# run: docker compose up -d --force-recreate api worker
+ALLOW_DANGER_MODE=false
+DANGER_MAX_SCAN_SECONDS=240
+DANGER_MAX_REQUESTS_TOTAL=500
+DANGER_REQUEST_DELAY_MS=150
+
+# Scan performance
+SCAN_TOOL_CONCURRENCY=8
+HTTP_POOL_MAX_IDLE=16
+DNS_CACHE_TTL_SECONDS=30
 
 API_HOST=0.0.0.0
 API_PORT=8000
