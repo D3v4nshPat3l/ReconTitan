@@ -12,6 +12,7 @@ synchronous ``/api/test-scan`` path is used and Celery is never involved:
 
 from __future__ import annotations
 
+import inspect
 import os
 import re
 from pathlib import Path
@@ -177,6 +178,19 @@ def test_env_file_sets_danger_mode_for_a_local_operator(monkeypatch):
         load_dotenv(env_file, override=False)
 
     assert Settings().ALLOW_DANGER_MODE is True
+
+
+def test_suite_is_isolated_from_a_developers_env_file():
+    """Loading .env made results depend on the developer's machine.
+
+    A local API_ACCESS_KEY 401s every API test and a local
+    ALLOW_DANGER_MODE=true inverts the gate tests, so conftest opts out and
+    config must honour that.
+    """
+    from app import config
+
+    assert os.environ.get("RECONTITAN_SKIP_DOTENV") == "1"
+    assert "RECONTITAN_SKIP_DOTENV" in inspect.getsource(config._load_env_file)
 
 
 def test_repo_env_loader_targets_the_repository_root():

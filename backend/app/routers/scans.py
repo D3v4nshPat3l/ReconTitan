@@ -8,10 +8,11 @@ import uuid
 from time import perf_counter
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.database import get_db
+from app.services import audit
 from app.models.schemas import (
     ScanReport,
     ScanRequest,
@@ -80,13 +81,21 @@ def _report_payload(record: dict) -> dict:
 
 
 @router.post("/scan", response_model=ScanResponse, status_code=202)
-def initiate_scan(request: ScanRequest):
+def initiate_scan(request: ScanRequest, http_request: Request):
     gate = check_danger_gate(request.scan_type.value, acknowledgement=request.danger_acknowledgement)
     if not gate.allowed:
+        audit.record_scan_event(
+            audit.SCAN_GATE_DENIED, http_request,
+            target=request.target, scan_type=request.scan_type.value, reason=gate.reason,
+        )
         raise HTTPException(status_code=403, detail=gate.reason)
 
     ok, target, error = validate_scan_target(request.target, resolve_dns=True)
     if not ok:
+        audit.record_scan_event(
+            audit.SCAN_REJECTED, http_request,
+            target=request.target, scan_type=request.scan_type.value, reason=error,
+        )
         raise HTTPException(status_code=400, detail=error)
 
     scan_id = f"scan_{uuid.uuid4().hex[:12]}"
@@ -106,6 +115,11 @@ def initiate_scan(request: ScanRequest):
         "created_at": now,
         "started_at": None,
         "completed_at": None,
+        # Attribution. Without these the admin view cannot answer who ran a
+        # scan, and an abusive target cannot be traced back to a source.
+        "client_ip": audit.client_ip(http_request),
+        "user_agent": audit._clip(http_request.headers.get("user-agent", ""), 256),
+        "api_key_id": audit.key_fingerprint(http_request.headers.get("x-recontitan-key", "")),
     }
 
     db = get_db()
@@ -130,6 +144,11 @@ def initiate_scan(request: ScanRequest):
             )
         raise HTTPException(status_code=503, detail="Scan worker is unavailable") from exc
 
+    audit.record_scan_event(
+        audit.SCAN_ACCEPTED, http_request,
+        scan_id=scan_id, target=target, scan_type=request.scan_type.value,
+        api_key_id=scan_record["api_key_id"],
+    )
     logger.info("Scan accepted: %s -> %s (%s)", scan_id, target, request.scan_type.value)
     return ScanResponse(message=f"Scan queued for {target}", scan_id=scan_id, target=target)
 

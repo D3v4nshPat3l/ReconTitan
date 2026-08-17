@@ -546,6 +546,19 @@ DANGEROUS_HEADERS = [
 # ═══════════════════════════════════════════════════════════
 # HELPER: stamp security headers onto any early-exit response
 # ═══════════════════════════════════════════════════════════
+def _audit_security(kind: str, request, detail: str = "", **fields):
+    """Record an attacker-facing event without ever failing the request.
+
+    Imported lazily so the middleware keeps working if persistence is absent.
+    """
+    try:
+        from app.services import audit
+
+        audit.record_security_event(kind, request, detail=detail, **fields)
+    except Exception:
+        pass
+
+
 def _secure_response(response, path: str = "", request_id: str | None = None):
     """Apply all security headers to early-exit responses (429, 403, 404, 400)."""
     for h, v in SECURITY_HEADERS_ALL.items():
@@ -612,6 +625,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         user_agent = request.headers.get("user-agent", "")
         if BLOCKED_UA.search(user_agent):
             logger.warning("[BLOCK] scanner user-agent: %s", user_agent[:80])
+            _audit_security("agent.blocked", request, detail=user_agent[:120])
             return _secure_response(JSONResponse(status_code=403, content={"detail": "Forbidden"}), path)
 
         lower_headers = {header.lower() for header in request.headers.keys()}
@@ -623,6 +637,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if path != "/api/health":
             limited = rate_limiter.check(request)
             if limited:
+                _audit_security("ratelimit.exceeded", request, detail=path)
                 return _secure_response(limited, path)
 
         public_api_paths = {"/api/health", "/api/news", "/api/capabilities", "/api/docs", "/api/redoc", "/api/openapi.json"}
@@ -632,6 +647,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             if not supplied and authorization.lower().startswith("bearer "):
                 supplied = authorization[7:].strip()
             if not supplied or not secrets.compare_digest(supplied, settings.API_ACCESS_KEY):
+                _audit_security(
+                    "auth.failed", request,
+                    detail="missing key" if not supplied else "invalid key",
+                )
                 return _secure_response(JSONResponse(
                     status_code=401,
                     content={"error": "API access key required"},
@@ -643,6 +662,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 injection = is_injection_attempt(value)
                 if injection:
                     logger.warning("[INJECT] query key=%s payload=%s", key, injection[:80])
+                    _audit_security("injection.blocked", request, detail=injection[:120], surface="query")
                     return _secure_response(JSONResponse(status_code=400, content={"error": "Malicious input blocked"}), path)
 
             injection = is_injection_attempt(path)
@@ -686,6 +706,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         ):
                             limited = rate_limiter.check_danger(request)
                             if limited:
+                                _audit_security("ratelimit.exceeded", request, detail="danger profile")
                                 return _secure_response(limited, path, request_id)
                     else:
                         values = [body.decode("utf-8", errors="ignore")[:20_000]]
@@ -693,6 +714,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         injection = is_injection_attempt(value)
                         if injection:
                             logger.warning("[INJECT] body payload=%s", injection[:80])
+                            _audit_security("injection.blocked", request, detail=injection[:120], surface="body")
                             return _secure_response(JSONResponse(status_code=400, content={"error": "Malicious input blocked"}), path)
 
             target = request.query_params.get("target", "")

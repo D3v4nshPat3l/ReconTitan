@@ -23,6 +23,11 @@ def _load_env_file() -> None:
     """
     if load_dotenv is None:
         return
+    # The test suite must not inherit whatever the developer has in .env, or
+    # results depend on the machine: a local API_ACCESS_KEY makes every API
+    # test 401, and a local ALLOW_DANGER_MODE=true inverts the gate tests.
+    if os.getenv("RECONTITAN_SKIP_DOTENV", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
     if env_path.is_file():
         load_dotenv(env_path, override=False)
@@ -172,6 +177,16 @@ class Settings:
         # Short by design: a long TTL would widen the DNS-rebinding window that
         # the per-request pinning exists to close.
         self.DNS_CACHE_TTL_SECONDS = _env_int("DNS_CACHE_TTL_SECONDS", 30, minimum=0)
+
+        # Audit trail. Attribution for the admin and SOC dashboards.
+        self.AUDIT_ENABLED = _env_bool("AUDIT_ENABLED", True)
+        # This collection stores client IP addresses, so retention is a ceiling
+        # enforced by a TTL index rather than unbounded history.
+        self.AUDIT_RETENTION_DAYS = _env_int("AUDIT_RETENTION_DAYS", 90, minimum=1)
+        # Attacker-facing events are coalesced for at most this long so a
+        # request flood cannot become a database write flood.
+        self.AUDIT_FLUSH_SECONDS = _env_int("AUDIT_FLUSH_SECONDS", 5, minimum=1)
+        self.AUDIT_MAX_PENDING = _env_int("AUDIT_MAX_PENDING", 2000, minimum=10)
 
         # Celery ceilings. The default pair applies to a single phase task; the
         # orchestrator runs every phase inline and needs a whole-pipeline budget.
