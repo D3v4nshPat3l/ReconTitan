@@ -38,9 +38,15 @@ celery_app.conf.update(
     # Result expiry — keep results for 24 hours
     result_expires=86400,
 
-    # Task time limits (hard kill after this)
-    task_time_limit=900,              # 15 minutes max per individual tool
-    task_soft_time_limit=840,         # Soft warning at 14 minutes
+    # Task time limits. These are the *default* per-task ceilings; the
+    # orchestrator overrides them below because it runs every phase inline.
+    task_time_limit=settings.CELERY_TASK_TIME_LIMIT,
+    task_soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT,
+
+    # A scan killed by the hard limit must not be redelivered. Without this a
+    # long scan is retried forever by the next worker, re-attacking the target.
+    task_acks_on_failure_or_timeout=True,
+    task_reject_on_worker_lost=False,
 
     # Task routes — different queues for different workload types
     task_routes={
@@ -49,6 +55,18 @@ celery_app.conf.update(
         "app.tasks.scan_tasks.run_osint":       {"queue": "osint"},
         "app.tasks.scan_tasks.run_danger_scan": {"queue": "danger"},
         "app.tasks.scan_tasks.orchestrate_scan": {"queue": "orchestrator"},
+    },
+
+    # ``orchestrate_scan`` runs recon, OSINT, portscan, vulnscan and danger
+    # inline in a single task, so the per-tool default above would hard-kill it
+    # partway through — usually before the danger phase ever started, leaving
+    # the scan stuck at "running" because a signal kill skips the except block.
+    # It gets its own ceiling sized to the whole pipeline instead.
+    task_annotations={
+        "app.tasks.scan_tasks.orchestrate_scan": {
+            "time_limit": settings.SCAN_HARD_TIME_LIMIT,
+            "soft_time_limit": settings.SCAN_SOFT_TIME_LIMIT,
+        },
     },
 
     # Default queue for anything not explicitly routed

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Callable
+
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.celery_app import celery_app
 from app.config import settings
@@ -69,6 +72,20 @@ def orchestrate_scan(self, scan_id: str, target: str, scan_type: str):
         run_ai_analysis.run(scan_id)
         logger.info("[%s] scan complete", scan_id)
         return {"scan_id": scan_id, "status": "completed"}
+    except SoftTimeLimitExceeded:
+        # The soft limit fires ~60s before the hard kill, which is the only
+        # window in which anything can still be written. Without this the hard
+        # SIGKILL skips every handler and the scan stays "running" forever.
+        logger.error("[%s] scan hit the %ss pipeline ceiling", scan_id, settings.SCAN_SOFT_TIME_LIMIT)
+        _update_scan_status(
+            scan_id, "failed", progress=100, completed=True,
+            error=(
+                f"Scan exceeded the {settings.SCAN_SOFT_TIME_LIMIT}s pipeline ceiling and was stopped. "
+                "Findings collected before the ceiling are kept. Raise SCAN_SOFT_TIME_LIMIT, lower the "
+                "per-tool timeouts, or scan a narrower target."
+            ),
+        )
+        raise
     except Exception as exc:
         logger.exception("[%s] scan pipeline failed", scan_id)
         _update_scan_status(scan_id, "failed", progress=100, error=type(exc).__name__, completed=True)
@@ -88,7 +105,7 @@ def run_recon(self, scan_id: str, target: str):
         ("subfinder", 27, lambda: run_subfinder(target)),
         ("amass", 30, lambda: run_amass(target)),
     ]
-    count = _run_tools(scan_id, "recon", tools)
+    count = _run_tools(scan_id, "recon", tools, parallel=True)
     return {"phase": "recon", "status": "complete", "findings": count}
 
 
@@ -112,7 +129,7 @@ def run_osint(self, scan_id: str, target: str):
         ("censys", 69, lambda: run_censys(target)),
         ("theharvester", 71, lambda: run_theharvester(target)),
     ]
-    count = _run_tools(scan_id, "osint", tools)
+    count = _run_tools(scan_id, "osint", tools, parallel=True)
     return {"phase": "osint", "status": "complete", "findings": count}
 
 
@@ -218,29 +235,96 @@ def _run_tools(
     *,
     completed: list[str] | None = None,
     failed: list[str] | None = None,
+    parallel: bool = False,
 ) -> int:
-    all_raw: list[dict] = []
-    for tool_name, progress, tool_fn in tools:
-        _update_scan_status(scan_id, "running", phase=phase, progress=progress, tools_running=[tool_name])
-        try:
-            results = tool_fn() or []
-            all_raw.extend(results)
-            if completed is not None:
-                completed.append(tool_name)
-            _update_scan_status(
-                scan_id, "running", phase=phase, progress=progress,
-                tools_completed=[tool_name], tools_running=[],
-            )
-            logger.info("[%s] %s: %d findings", scan_id, tool_name, len(results))
-        except Exception:
-            logger.exception("[%s] %s failed", scan_id, tool_name)
-            if failed is not None:
-                failed.append(tool_name)
-            _update_scan_status(scan_id, "running", phase=phase, progress=progress, tools_completed=[tool_name], tools_running=[])
-    findings = [_to_finding(raw) for raw in all_raw]
+    """Run a phase's tools fail-soft and persist their findings.
+
+    ``parallel`` is opt-in because it is only correct for tools that do not
+    depend on each other. Recon and OSINT tools are independent and almost
+    entirely network-bound, so running them sequentially made a phase cost the
+    *sum* of every tool's timeout. Danger stages feed each other (recon seeds
+    the attack surface, which seeds the injection modules) and must stay
+    ordered, so they keep the sequential path.
+    """
+    if parallel and len(tools) > 1 and settings.SCAN_TOOL_CONCURRENCY > 1:
+        results = _run_tools_parallel(scan_id, phase, tools, completed=completed, failed=failed)
+    else:
+        results = _run_tools_sequential(scan_id, phase, tools, completed=completed, failed=failed)
+    findings = [_to_finding(raw) for raw in results]
     if findings:
         _save_findings(scan_id, findings)
     return len(findings)
+
+
+def _invoke(scan_id: str, tool_name: str, tool_fn: Callable[[], list[dict]]) -> tuple[list[dict], bool]:
+    """Run one tool, returning its findings and whether it succeeded."""
+    try:
+        results = tool_fn() or []
+        logger.info("[%s] %s: %d findings", scan_id, tool_name, len(results))
+        return results, True
+    except Exception:
+        logger.exception("[%s] %s failed", scan_id, tool_name)
+        return [], False
+
+
+def _run_tools_sequential(
+    scan_id: str,
+    phase: str,
+    tools: list[tuple[str, int, Callable[[], list[dict]]]],
+    *,
+    completed: list[str] | None,
+    failed: list[str] | None,
+) -> list[dict]:
+    all_raw: list[dict] = []
+    for tool_name, progress, tool_fn in tools:
+        _update_scan_status(scan_id, "running", phase=phase, progress=progress, tools_running=[tool_name])
+        results, ok = _invoke(scan_id, tool_name, tool_fn)
+        all_raw.extend(results)
+        if ok and completed is not None:
+            completed.append(tool_name)
+        if not ok and failed is not None:
+            failed.append(tool_name)
+        _update_scan_status(
+            scan_id, "running", phase=phase, progress=progress,
+            tools_completed=[tool_name], tools_running=[],
+        )
+    return all_raw
+
+
+def _run_tools_parallel(
+    scan_id: str,
+    phase: str,
+    tools: list[tuple[str, int, Callable[[], list[dict]]]],
+    *,
+    completed: list[str] | None,
+    failed: list[str] | None,
+) -> list[dict]:
+    names = [name for name, _, _ in tools]
+    _update_scan_status(scan_id, "running", phase=phase, progress=tools[0][1], tools_running=names)
+    workers = min(settings.SCAN_TOOL_CONCURRENCY, len(tools))
+    # Indexed so findings keep the declared tool order regardless of which tool
+    # finishes first — otherwise report ordering would vary run to run.
+    collected: list[list[dict]] = [[] for _ in tools]
+    succeeded: list[bool] = [False] * len(tools)
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"scan-{phase}") as pool:
+        futures = {
+            pool.submit(_invoke, scan_id, name, fn): index
+            for index, (name, _, fn) in enumerate(tools)
+        }
+        for future in futures:
+            index = futures[future]
+            collected[index], succeeded[index] = future.result()
+
+    for index, (tool_name, _, _) in enumerate(tools):
+        if succeeded[index] and completed is not None:
+            completed.append(tool_name)
+        if not succeeded[index] and failed is not None:
+            failed.append(tool_name)
+    _update_scan_status(
+        scan_id, "running", phase=phase, progress=tools[-1][1],
+        tools_completed=names, tools_running=[],
+    )
+    return [raw for bucket in collected for raw in bucket]
 
 
 def _to_finding(raw: dict) -> dict:

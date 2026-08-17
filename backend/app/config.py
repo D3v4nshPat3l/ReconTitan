@@ -22,6 +22,12 @@ def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
     return value
 
 
+#: Tool counts per phase, used only to size the orchestrator's time budget.
+#: Kept here rather than imported from app.tasks so config stays dependency-free.
+RECON_TOOL_COUNT = 8
+OSINT_TOOL_COUNT = 15
+
+
 def _origins_from_env() -> list[str]:
     raw = os.getenv(
         "CORS_ORIGINS",
@@ -132,6 +138,49 @@ class Settings:
         self.DANGER_DIR_BUST_WORDLIST = _env_int("DANGER_DIR_BUST_WORDLIST", 120, minimum=1)
         self.DANGER_IDOR_MAX_IDS = _env_int("DANGER_IDOR_MAX_IDS", 10, minimum=2)
         self.DANGER_ENABLE_XXE_OOB = _env_bool("DANGER_ENABLE_XXE_OOB", False)
+
+        # Parallelism for independent, network-bound tools. Recon and OSINT
+        # tools do not depend on each other, so running them one at a time made
+        # a scan as slow as the sum of every tool's timeout.
+        self.SCAN_TOOL_CONCURRENCY = _env_int("SCAN_TOOL_CONCURRENCY", 8, minimum=1)
+        # Reusing a pinned connection avoids a fresh TCP+TLS handshake per probe.
+        self.HTTP_POOL_MAX_IDLE = _env_int("HTTP_POOL_MAX_IDLE", 16, minimum=0)
+        # Short by design: a long TTL would widen the DNS-rebinding window that
+        # the per-request pinning exists to close.
+        self.DNS_CACHE_TTL_SECONDS = _env_int("DNS_CACHE_TTL_SECONDS", 30, minimum=0)
+
+        # Celery ceilings. The default pair applies to a single phase task; the
+        # orchestrator runs every phase inline and needs a whole-pipeline budget.
+        self.CELERY_TASK_TIME_LIMIT = _env_int("CELERY_TASK_TIME_LIMIT", 900, minimum=60)
+        self.CELERY_TASK_SOFT_TIME_LIMIT = _env_int(
+            "CELERY_TASK_SOFT_TIME_LIMIT", max(60, self.CELERY_TASK_TIME_LIMIT - 60), minimum=30
+        )
+
+    @property
+    def SCAN_SOFT_TIME_LIMIT(self) -> int:
+        """Whole-pipeline soft ceiling for ``orchestrate_scan``.
+
+        Derived from the phase budgets rather than hard-coded so raising
+        DANGER_MAX_SCAN_SECONDS or a tool timeout can never leave the
+        orchestrator with a ceiling below the work it is being asked to do.
+        """
+        override = os.getenv("SCAN_SOFT_TIME_LIMIT", "").strip()
+        if override:
+            return _env_int("SCAN_SOFT_TIME_LIMIT", 0, minimum=60)
+        lanes = max(1, self.SCAN_TOOL_CONCURRENCY)
+        # A phase of N independent tools takes ceil(N / lanes) waves, and a wave
+        # is at worst one tool timeout.
+        waves = -(-RECON_TOOL_COUNT // lanes) + -(-OSINT_TOOL_COUNT // lanes)
+        recon_and_osint = waves * self.SCAN_TIMEOUT_DEFAULT
+        active = self.SCAN_TIMEOUT_NMAP + (
+            self.SCAN_TIMEOUT_NUCLEI if self.ENABLE_ACTIVE_VULN_TOOLS else self.SCAN_TIMEOUT_DEFAULT
+        )
+        return recon_and_osint + active + self.DANGER_MAX_SCAN_SECONDS + 300
+
+    @property
+    def SCAN_HARD_TIME_LIMIT(self) -> int:
+        """Hard ceiling, one minute past the soft one so cleanup can run first."""
+        return self.SCAN_SOFT_TIME_LIMIT + 60
 
     @property
     def REDIS_URL(self) -> str:
