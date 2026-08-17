@@ -81,6 +81,11 @@ services:
     init: true
     security_opt:
       - no-new-privileges:true
+    # Mongo is the only service on both networks, so admin can read the audit
+    # trail without the scanner containers gaining any route to admin.
+    networks:
+      - default
+      - adminnet
 
   api:
     build:
@@ -253,6 +258,62 @@ services:
     cap_drop:
       - ALL
 
+  admin:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recontitan-admin
+    # Host loopback ONLY. Docker publishes this on 127.0.0.1, so the port is
+    # unreachable from the network regardless of cloud firewall rules. Reaching
+    # it requires an SSH tunnel:
+    #   ssh -N -L 9000:127.0.0.1:9000 root@your-server
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:-9000}:9000"
+    environment:
+      RECONTITAN_DEBUG: "false"
+      ADMIN_ENABLED: ${ADMIN_ENABLED:-false}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN in .env}
+      ADMIN_PORT: "9000"
+      ADMIN_MAX_FAILURES: ${ADMIN_MAX_FAILURES:-5}
+      ADMIN_LOCKOUT_SECONDS: ${ADMIN_LOCKOUT_SECONDS:-900}
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_USER: ${MONGO_USER:?Set MONGO_USER in .env}
+      MONGO_PASS: ${MONGO_PASS:?Set MONGO_PASS in .env}
+      MONGO_DB: ${MONGO_DB:-recontitan}
+      MONGO_AUTH_SOURCE: ${MONGO_AUTH_SOURCE:-recontitan}
+      AUDIT_ENABLED: ${AUDIT_ENABLED:-true}
+      AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-90}
+      TMPDIR: /tmp/recontitan
+    command: >
+      uvicorn app.admin.main:admin_app
+      --host 0.0.0.0
+      --port 9000
+      --no-server-header
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # Deliberately NOT on the default network: the api and worker containers
+    # forge HTTP requests to user-supplied targets, so they must have no route
+    # to this service even if target validation is bypassed.
+    networks:
+      - adminnet
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp/recontitan:uid=10001,gid=10001,mode=0700
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
 volumes:
   redis_data:
   mongo_data:
+
+networks:
+  # The scanner containers are never attached to this. Isolation here is
+  # structural: there is no route from the request-forging services to admin.
+  adminnet:
+    driver: bridge

@@ -178,6 +178,20 @@ class Settings:
         # the per-request pinning exists to close.
         self.DNS_CACHE_TTL_SECONDS = _env_int("DNS_CACHE_TTL_SECONDS", 30, minimum=0)
 
+        # ── Admin surface ────────────────────────────────────────────────────
+        # The admin app is a separate ASGI application that is never proxied by
+        # nginx and never published beyond host loopback. Reaching it requires
+        # an SSH tunnel, so there is no public listener to attack. The token
+        # below is defence in depth for the cases that survive that: a shell on
+        # the host, or a target-validation bypass in the scanner (this service
+        # forges HTTP requests for a living, so that risk is real).
+        self.ADMIN_ENABLED = _env_bool("ADMIN_ENABLED", False)
+        self.ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
+        self.ADMIN_PORT = _env_int("ADMIN_PORT", 9000, minimum=1)
+        self.ADMIN_MIN_TOKEN_LENGTH = _env_int("ADMIN_MIN_TOKEN_LENGTH", 32, minimum=32)
+        self.ADMIN_MAX_FAILURES = _env_int("ADMIN_MAX_FAILURES", 5, minimum=1)
+        self.ADMIN_LOCKOUT_SECONDS = _env_int("ADMIN_LOCKOUT_SECONDS", 900, minimum=30)
+
         # Audit trail. Attribution for the admin and SOC dashboards.
         self.AUDIT_ENABLED = _env_bool("AUDIT_ENABLED", True)
         # This collection stores client IP addresses, so retention is a ceiling

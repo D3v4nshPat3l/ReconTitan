@@ -61,6 +61,7 @@ API_ACCESS_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
 REDIS_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(40))')
 MONGO_ROOT_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(40))')
 MONGO_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(40))')
+ADMIN_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
 cat > .env <<ENVEOF
 RECONTITAN_DEBUG=false
 DOMAIN=$DOMAIN
@@ -85,6 +86,20 @@ MONGO_DB=recontitan
 MONGO_USER=recontitan_app
 MONGO_PASS=$MONGO_PASS
 MONGO_AUTH_SOURCE=recontitan
+
+# Admin surface. Published to host loopback only and never proxied by nginx,
+# so it has no public route. Reach it with an SSH tunnel:
+#   ssh -N -L 9000:127.0.0.1:9000 root@$DOMAIN
+# then open http://127.0.0.1:9000/admin/ on your own machine.
+ADMIN_ENABLED=true
+ADMIN_TOKEN=$ADMIN_TOKEN
+ADMIN_PORT=9000
+ADMIN_MAX_FAILURES=5
+ADMIN_LOCKOUT_SECONDS=900
+
+# Audit trail
+AUDIT_ENABLED=true
+AUDIT_RETENTION_DAYS=90
 
 # Danger Mode. Left disabled deliberately: it sends bounded penetration-test
 # simulation traffic and must be a conscious decision per deployment. Set to
@@ -182,3 +197,8 @@ chmod 644 /etc/cron.d/recontitan-ssl-renew
 
 ok "ReconTitan is available at https://$DOMAIN"
 warn "Browser API access key (store securely): $API_ACCESS_KEY"
+warn "Admin token (store securely, shown once): $ADMIN_TOKEN"
+echo
+log "The admin surface has no public route. To reach it:"
+echo "    ssh -N -L 9000:127.0.0.1:9000 root@$DOMAIN"
+echo "    then open http://127.0.0.1:9000/admin/ locally"
