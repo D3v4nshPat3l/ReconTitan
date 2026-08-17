@@ -129,6 +129,68 @@ def test_compose_wires_danger_settings_into_both_api_and_worker():
     assert len(re.findall(r"^\s+DANGER_MAX_SCAN_SECONDS:", compose, re.M)) == 2
 
 
+# ── .env is actually read outside Docker ─────────────────────────────────────
+
+def test_env_file_sets_danger_mode_for_a_local_operator(monkeypatch):
+    """A local operator's .env was silently ignored outside Docker.
+
+    Compose interpolates .env itself, so containers were always configured
+    correctly. Nothing loaded it for a bare uvicorn/celery run, so setting
+    ALLOW_DANGER_MODE=true in .env had no effect and every danger scan was
+    rejected by the gate with "ALLOW_DANGER_MODE=false".
+    """
+    from dotenv import load_dotenv
+
+    from app.config import Settings
+
+    import tempfile
+
+    monkeypatch.delenv("ALLOW_DANGER_MODE", raising=False)
+    assert Settings().ALLOW_DANGER_MODE is False
+
+    with tempfile.TemporaryDirectory() as scratch:
+        env_file = Path(scratch) / ".env"
+        env_file.write_text("ALLOW_DANGER_MODE=true\n", encoding="utf-8")
+        load_dotenv(env_file, override=False)
+
+    assert Settings().ALLOW_DANGER_MODE is True
+
+
+def test_repo_env_loader_targets_the_repository_root():
+    """The loader must look beside docker-compose.yml, not inside backend/app."""
+    from app import config
+
+    expected = REPO_ROOT / ".env"
+    resolved = Path(config.__file__).resolve().parent.parent.parent / ".env"
+    assert resolved == expected
+
+
+def test_dotenv_is_a_declared_dependency():
+    """It was in requirements.txt but nothing ever imported it."""
+    requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text(encoding="utf-8")
+    assert "python-dotenv" in requirements
+
+    source = (REPO_ROOT / "backend" / "app" / "config.py").read_text(encoding="utf-8")
+    assert "load_dotenv" in source, "config must actually load the .env file"
+
+
+def test_real_environment_wins_over_the_env_file(monkeypatch):
+    """Compose and systemd set real env vars; the file must not override them."""
+    from app import config
+
+    monkeypatch.setenv("ALLOW_DANGER_MODE", "false")
+    config._load_env_file()
+    assert os.environ["ALLOW_DANGER_MODE"] == "false"
+
+
+def test_missing_env_file_is_not_an_error(monkeypatch):
+    """A fresh clone has no .env; startup must not blow up."""
+    from app import config
+
+    monkeypatch.setattr(config, "load_dotenv", None)
+    config._load_env_file()  # must not raise
+
+
 # ── Connection reuse and DNS caching ─────────────────────────────────────────
 
 @pytest.fixture(autouse=True)

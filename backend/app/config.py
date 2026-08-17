@@ -6,6 +6,30 @@ import os
 from pathlib import Path
 from urllib.parse import quote_plus
 
+try:  # pragma: no cover - exercised implicitly by every settings read
+    from dotenv import load_dotenv
+except ImportError:  # python-dotenv is declared, but never hard-fail on it
+    load_dotenv = None
+
+
+def _load_env_file() -> None:
+    """Load the repository ``.env`` into the process environment.
+
+    Docker Compose interpolates ``.env`` itself, so the containers were always
+    configured correctly. Nothing loaded it for a bare ``uvicorn``/``celery``
+    run, so a local operator who set ``ALLOW_DANGER_MODE=true`` in ``.env`` was
+    silently ignored and every danger scan was rejected by the gate. Existing
+    environment variables still win, so Compose and systemd keep precedence.
+    """
+    if load_dotenv is None:
+        return
+    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    if env_path.is_file():
+        load_dotenv(env_path, override=False)
+
+
+_load_env_file()
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
