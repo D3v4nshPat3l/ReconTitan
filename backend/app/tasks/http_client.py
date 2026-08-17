@@ -8,9 +8,12 @@ time, preventing DNS rebinding and redirects into private networks.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, field
 import ipaddress
 import ssl
+import threading
+import time
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import certifi
@@ -20,6 +23,12 @@ from app.config import settings
 from app.targeting import resolve_target_addresses, validate_scan_target
 
 DEFAULT_UA = "Mozilla/5.0 (compatible; ReconTitan/0.3; +authorized-security-scan)"
+
+# Recon, OSINT and danger modules all share this client, and recon/OSINT now run
+# in a thread pool, so both caches below are guarded by a lock.
+_lock = threading.Lock()
+_pools: "OrderedDict[tuple, urllib3.HTTPConnectionPool]" = OrderedDict()
+_dns_cache: dict[str, tuple[float, str, tuple[str, ...]]] = {}
 
 
 class UnsafeURL(ValueError):
@@ -51,17 +60,100 @@ class SafeResponse:
         return json.loads(self.text)
 
 
+def _resolve_validated(host: str) -> tuple[str, tuple[str, ...]]:
+    """Validate and resolve ``host``, caching the result for a short TTL.
+
+    A danger scan sends hundreds of probes to one host, and re-running target
+    validation plus a fresh DNS lookup on every single one dominated the scan's
+    wall clock — especially under Docker, where lookups leave the container.
+
+    The TTL is deliberately short. Caching a resolution widens the DNS-rebinding
+    window that the pinning below exists to close, so the cache trades a bounded
+    amount of that protection for throughput. Every cached address is still
+    re-checked against the private/reserved rules before a socket is opened, and
+    setting ``DNS_CACHE_TTL_SECONDS=0`` restores per-request resolution.
+    """
+    ttl = settings.DNS_CACHE_TTL_SECONDS
+    if ttl:
+        with _lock:
+            entry = _dns_cache.get(host)
+            if entry and entry[0] > time.monotonic():
+                return entry[1], entry[2]
+
+    ok, hostname, error = validate_scan_target(host, resolve_dns=True)
+    if not ok:
+        raise UnsafeURL(error)
+    addresses = tuple(resolve_target_addresses(hostname))
+
+    if ttl:
+        with _lock:
+            if len(_dns_cache) > 512:
+                _dns_cache.clear()
+            _dns_cache[host] = (time.monotonic() + ttl, hostname, addresses)
+    return hostname, addresses
+
+
 def _validated_destination(url: str) -> tuple[object, str, list[str]]:
     parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise UnsafeURL("Only absolute HTTP(S) URLs are allowed")
     if parsed.username or parsed.password:
         raise UnsafeURL("Credentials in target URLs are not allowed")
-    ok, hostname, error = validate_scan_target(parsed.hostname, resolve_dns=True)
-    if not ok:
-        raise UnsafeURL(error)
-    addresses = resolve_target_addresses(hostname)
-    return parsed, hostname, addresses
+    hostname, addresses = _resolve_validated(parsed.hostname)
+    return parsed, hostname, list(addresses)
+
+
+def _get_pool(scheme: str, address: str, port: int, hostname: str, timeout: float):
+    """Return a keep-alive pool pinned to one validated address.
+
+    The key includes the resolved address and the hostname used for SNI and
+    certificate verification, so a reused connection is always the same pinned
+    destination that was validated — reuse cannot cross hosts.
+    """
+    key = (scheme, address, port, hostname)
+    if settings.HTTP_POOL_MAX_IDLE:
+        with _lock:
+            pool = _pools.get(key)
+            if pool is not None:
+                _pools.move_to_end(key)
+                return pool, True
+
+    common = {
+        "host": address,
+        "port": port,
+        "timeout": urllib3.Timeout(connect=timeout, read=timeout),
+        "maxsize": 4,
+        "block": False,
+        "retries": False,
+    }
+    if scheme == "https":
+        pool = urllib3.HTTPSConnectionPool(
+            **common,
+            cert_reqs=ssl.CERT_REQUIRED,
+            ca_certs=certifi.where(),
+            assert_hostname=hostname,
+            server_hostname=hostname,
+        )
+    else:
+        pool = urllib3.HTTPConnectionPool(**common)
+
+    if not settings.HTTP_POOL_MAX_IDLE:
+        return pool, False
+    with _lock:
+        _pools[key] = pool
+        while len(_pools) > settings.HTTP_POOL_MAX_IDLE:
+            _, evicted = _pools.popitem(last=False)
+            evicted.close()
+    return pool, True
+
+
+def reset_http_client() -> None:
+    """Drop every cached pool and resolution. Used by tests and at worker exit."""
+    with _lock:
+        for pool in _pools.values():
+            pool.close()
+        _pools.clear()
+        _dns_cache.clear()
 
 
 def _host_header(hostname: str, port: int | None, scheme: str) -> str:
@@ -105,27 +197,9 @@ def _request_pinned(
         # Defense in depth in case resolution helpers are changed later.
         if not settings.ALLOW_PRIVATE_TARGETS and not ipaddress.ip_address(address).is_global:
             raise UnsafeURL("Destination is private, reserved, or non-routable")
-        pool = None
+        pool, cached = _get_pool(parsed.scheme, address, port, hostname, timeout)
         response = None
         try:
-            common = {
-                "host": address,
-                "port": port,
-                "timeout": urllib3.Timeout(connect=timeout, read=timeout),
-                "maxsize": 1,
-                "block": True,
-                "retries": False,
-            }
-            if parsed.scheme == "https":
-                pool = urllib3.HTTPSConnectionPool(
-                    **common,
-                    cert_reqs=ssl.CERT_REQUIRED,
-                    ca_certs=certifi.where(),
-                    assert_hostname=hostname,
-                    server_hostname=hostname,
-                )
-            else:
-                pool = urllib3.HTTPConnectionPool(**common)
             request_headers = dict(headers)
             request_headers["Host"] = _host_header(hostname, parsed.port, parsed.scheme)
             response = pool.urlopen(
@@ -136,6 +210,10 @@ def _request_pinned(
                 redirect=False,
                 preload_content=False,
                 decode_content=True,
+                # Per-request, never the pool default: a pool is shared across
+                # callers and Danger Mode clamps each probe's timeout to the
+                # time left on its deadline.
+                timeout=urllib3.Timeout(connect=timeout, read=timeout),
             )
             content = _read_bounded(response, max_bytes)
             return response.status, {str(k): str(v) for k, v in response.headers.items()}, content
@@ -145,8 +223,10 @@ def _request_pinned(
             last_error = exc
         finally:
             if response is not None:
+                # Returns the socket to the pool so the next probe to this
+                # pinned destination skips the TCP and TLS handshake.
                 response.release_conn()
-            if pool is not None:
+            if not cached:
                 pool.close()
     if last_error:
         raise last_error
