@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
+from app.services import sharedstate as shared_state
 from app.targeting import validate_scan_target
 
 logger = logging.getLogger("recontitan.security")
@@ -423,9 +424,7 @@ class RateLimiter:
     def _danger_locked(self, ip: str, now: float):
         """Apply the Danger Mode ceiling. Caller must already hold ``self.lock``."""
         danger_key = f"danger:{ip}"
-        self.requests[danger_key].append(now)
-        self._clean(danger_key, self.DANGER_WINDOW, now)
-        if len(self.requests.get(danger_key, [])) > self.DANGER_LIMIT:
+        if self._count(danger_key, self.DANGER_WINDOW, now) > self.DANGER_LIMIT:
             return JSONResponse(
                 status_code=429,
                 content={"error": "Danger Mode scan rate limit exceeded"},
@@ -438,34 +437,47 @@ class RateLimiter:
         with self.lock:
             return self._danger_locked(self._ip(request), time.time())
 
+    def _count(self, key: str, window: int, now: float) -> int:
+        """Hits for ``key`` in the window, shared across instances when possible.
+
+        With multiple instances each process previously kept its own list, so a
+        limit of N was really N per instance. Redis makes the ceiling mean what
+        it says; without Redis this is the original per-process behaviour.
+        """
+        if shared_state.is_shared():
+            return shared_state.hit(key, window)
+        self.requests[key].append(now)
+        self._clean(key, window, now)
+        return len(self.requests.get(key, []))
+
     def check(self, request: Request):
         ip = self._ip(request)
         now = time.time()
         path = request.url.path
         with self.lock:
             self._sweep(now)
+            shared_block = shared_state.locked_for(f"burst:{ip}") if shared_state.is_shared() else 0
             blocked_until = self.blocked.get(ip)
-            if blocked_until and now < blocked_until:
+            local_block = int(blocked_until - now) if blocked_until and now < blocked_until else 0
+            remaining = max(shared_block, local_block)
+            if remaining > 0:
                 return JSONResponse(
                     status_code=429,
                     content={"error": "Temporarily rate limited"},
-                    headers={"Retry-After": str(max(1, int(blocked_until - now)))},
+                    headers={"Retry-After": str(max(1, remaining))},
                 )
             self.blocked.pop(ip, None)
 
             burst_key = f"burst:{ip}"
-            self.requests[burst_key].append(now)
-            self._clean(burst_key, 2, now)
-            if len(self.requests.get(burst_key, [])) > self.BURST_THRESHOLD:
+            if self._count(burst_key, 2, now) > self.BURST_THRESHOLD:
                 self.blocked[ip] = now + self.BLOCK_DURATION
+                shared_state.lock_out(f"burst:{ip}", self.BLOCK_DURATION)
                 logger.warning("[DDOS] burst from %s; blocked for %ss", ip, self.BLOCK_DURATION)
                 return JSONResponse(status_code=429, content={"error": "Rate limit exceeded"})
 
             if "/test-scan" in path or path == "/api/scan":
                 scan_key = f"scan:{ip}"
-                self.requests[scan_key].append(now)
-                self._clean(scan_key, self.SCAN_WINDOW, now)
-                if len(self.requests.get(scan_key, [])) > self.SCAN_LIMIT:
+                if self._count(scan_key, self.SCAN_WINDOW, now) > self.SCAN_LIMIT:
                     return JSONResponse(status_code=429, content={"error": "Scan rate limit exceeded"})
                 if request.query_params.get("scan_type") == "danger":
                     limited = self._danger_locked(ip, now)
@@ -474,9 +486,7 @@ class RateLimiter:
 
             if path == "/api/report/pdf" or path.endswith("/report.pdf"):
                 export_key = f"export:{ip}"
-                self.requests[export_key].append(now)
-                self._clean(export_key, self.EXPORT_WINDOW, now)
-                if len(self.requests.get(export_key, [])) > self.EXPORT_LIMIT:
+                if self._count(export_key, self.EXPORT_WINDOW, now) > self.EXPORT_LIMIT:
                     return JSONResponse(
                         status_code=429,
                         content={"error": "Report export rate limit exceeded"},
@@ -484,9 +494,7 @@ class RateLimiter:
                     )
 
             api_key = f"api:{ip}"
-            self.requests[api_key].append(now)
-            self._clean(api_key, self.API_WINDOW, now)
-            if len(self.requests.get(api_key, [])) > self.API_LIMIT:
+            if self._count(api_key, self.API_WINDOW, now) > self.API_LIMIT:
                 return JSONResponse(status_code=429, content={"error": "API rate limit exceeded"})
         return None
 

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
+from app.config import settings
 from app.database import get_db
 from app.services import audit
 from app.models.schemas import (
@@ -97,6 +98,18 @@ def initiate_scan(request: ScanRequest, http_request: Request):
             target=request.target, scan_type=request.scan_type.value, reason=error,
         )
         raise HTTPException(status_code=400, detail=error)
+
+    if settings.SERVERLESS:
+        # No worker process exists to consume the queue here, so accepting the
+        # scan would leave it queued forever. Fail loudly and name the endpoint
+        # that does work in this deployment.
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Asynchronous scans need a Celery worker, which this deployment does not run. "
+                "Use GET /api/test-scan, which performs the scan synchronously."
+            ),
+        )
 
     scan_id = f"scan_{uuid.uuid4().hex[:12]}"
     now = datetime.now(timezone.utc)

@@ -28,6 +28,7 @@ import time
 from dataclasses import dataclass, field
 
 from app.config import settings
+from app.services import sharedstate as shared_state
 
 logger = logging.getLogger("recontitan.admin.auth")
 
@@ -86,7 +87,14 @@ def _prune(now: float) -> None:
 
 
 def lockout_remaining(source: str) -> float:
-    """Seconds left on an active lockout for ``source``; 0 when not locked."""
+    """Seconds left on an active lockout for ``source``; 0 when not locked.
+
+    Checked in shared state first. Per-process lockout is worthless across
+    instances: an attacker simply retries until a fresh instance answers.
+    """
+    shared = shared_state.locked_for(f"admin:{source}")
+    if shared > 0:
+        return float(shared)
     with _lock:
         record = _failures.get(source)
         if record is None:
@@ -106,18 +114,22 @@ def register_failure(source: str) -> float:
         if record.count >= settings.ADMIN_MAX_FAILURES:
             # Escalating: repeated rounds of failures lock out for longer.
             rounds = record.count // max(1, settings.ADMIN_MAX_FAILURES)
-            record.locked_until = now + settings.ADMIN_LOCKOUT_SECONDS * min(rounds, 8)
+            duration = settings.ADMIN_LOCKOUT_SECONDS * min(rounds, 8)
+            record.locked_until = now + duration
+            shared_state.lock_out(f"admin:{source}", int(duration))
         return max(0.0, record.locked_until - now)
 
 
 def reset(source: str) -> None:
     """Clear the failure record after a successful authentication."""
+    shared_state.clear_lock(f"admin:{source}")
     with _lock:
         _failures.pop(source, None)
 
 
 def clear_all() -> None:
     """Test hook."""
+    shared_state.reset()
     with _lock:
         _failures.clear()
 

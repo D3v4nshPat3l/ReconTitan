@@ -4,7 +4,48 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import shutil
+
 from app.config import settings
+
+#: Modules that shell out to a binary. Each already fails soft when the binary
+#: is absent, but silence is not the same as a report: an operator needs to
+#: know a module was skipped rather than assume it found nothing.
+BINARY_MODULES: dict[str, tuple[str, ...]] = {
+    "port_scan": ("nmap",),
+    "subfinder": ("subfinder",),
+    "amass": ("amass",),
+    "waf_detect": ("wafw00f",),
+    "theharvester": ("theHarvester", "theharvester"),
+    "nuclei": ("nuclei",),
+    "nikto": ("nikto",),
+    "dir_fuzzing": ("ffuf", "gobuster"),
+    "sqlmap": ("sqlmap",),
+}
+
+
+def runtime_report() -> dict:
+    """Which modules can actually run here, and how scans are dispatched.
+
+    On a platform without system packages most of these binaries are absent.
+    The scan still runs; this makes the reduced coverage explicit instead of
+    letting empty results read as a clean target.
+    """
+    available, missing = [], []
+    for module, binaries in BINARY_MODULES.items():
+        (available if any(shutil.which(b) for b in binaries) else missing).append(module)
+    return {
+        "deployment": "serverless" if settings.SERVERLESS else "server",
+        "async_scans": not settings.SERVERLESS,
+        "sync_scan_endpoint": "/api/test-scan",
+        "shared_rate_limit_state": settings.SHARED_STATE_ENABLED,
+        "binary_modules_available": sorted(available),
+        "binary_modules_unavailable": sorted(missing),
+        "note": (
+            "Modules listed as unavailable are skipped because their binary is not installed. "
+            "A skipped module is not evidence that the target is unaffected."
+        ),
+    }
 
 CAPABILITIES: list[dict] = [
     {
@@ -142,4 +183,5 @@ def capabilities_payload(version: str) -> dict:
         "profiles": list(profiles.values()),
         "tool_groups": deepcopy(TOOL_GROUPS),
         "danger_mode": danger_mode_metadata(),
+        "runtime": runtime_report(),
     }

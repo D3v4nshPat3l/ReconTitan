@@ -247,6 +247,26 @@ python -m uvicorn app.main:app --app-dir backend --port 8000
 </details>
 
 <details>
+<summary><b>Vercel — reduced serverless deployment</b></summary>
+
+<br>
+
+Vercel runs no long-lived processes and no system packages, so this is a
+working but **reduced** configuration: 25 of 30 modules run (including every
+Danger Mode stage), while `port_scan`, `subfinder`, `amass`, `waf_detect` and
+`theharvester` are skipped, background scans are refused, and the admin console
+loses its loopback isolation.
+
+It needs MongoDB Atlas and Upstash Redis, both free tier. Redis is mandatory
+rather than optional: rate limits and admin lockout otherwise live in each
+instance's memory, so the ceilings multiply by instance count and lockout can
+be sidestepped — silently, with nothing logged.
+
+Full walkthrough: **[docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md)**
+
+</details>
+
+<details>
 <summary><b>Docker Compose — full stack with workers, queue, and database</b></summary>
 
 <br>

@@ -197,6 +197,15 @@ class Settings:
         self.ADMIN_MAX_FAILURES = _env_int("ADMIN_MAX_FAILURES", 5, minimum=1)
         self.ADMIN_LOCKOUT_SECONDS = _env_int("ADMIN_LOCKOUT_SECONDS", 900, minimum=30)
 
+        # Deployment shape. On a serverless platform every instance is a
+        # separate process, so per-process counters stop being a limitation and
+        # become a hole: rate limits multiply by instance count and admin
+        # lockout can be sidestepped by landing on a fresh instance.
+        self.SERVERLESS = _env_bool("SERVERLESS", bool(os.getenv("VERCEL")))
+        # Share rate-limit and lockout counters through Redis. Required for any
+        # multi-instance deployment; harmless on a single node.
+        self.SHARED_STATE_ENABLED = _env_bool("SHARED_STATE_ENABLED", bool(self.REDIS_PASSWORD or os.getenv("REDIS_URL")))
+
         # Audit trail. Attribution for the admin and SOC dashboards.
         self.AUDIT_ENABLED = _env_bool("AUDIT_ENABLED", True)
         # This collection stores client IP addresses, so retention is a ceiling
@@ -242,6 +251,11 @@ class Settings:
 
     @property
     def REDIS_URL(self) -> str:
+        # Managed Redis providers hand out a single connection string; prefer it
+        # over the host/port/password triple when present.
+        direct = os.getenv("REDIS_URL", "").strip()
+        if direct:
+            return direct
         if self.REDIS_PASSWORD:
             return f"redis://:{quote_plus(self.REDIS_PASSWORD)}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"

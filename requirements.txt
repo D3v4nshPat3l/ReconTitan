@@ -1,0 +1,3 @@
+# Vercel resolves dependencies from the project root. This mirrors
+# backend/requirements.txt so the serverless build installs the same set.
+-r backend/requirements.txt
