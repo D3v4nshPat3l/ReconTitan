@@ -25,7 +25,7 @@ from app.services import audit
 
 logger = logging.getLogger("recontitan.admin.api")
 
-router = APIRouter(prefix="/admin/api", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api", dependencies=[Depends(require_admin)])
 
 #: Event kinds that represent hostile or rejected activity, as opposed to
 #: ordinary operator actions. Used to separate "threat" counters from traffic.

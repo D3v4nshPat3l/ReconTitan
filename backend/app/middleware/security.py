@@ -627,7 +627,14 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             "console", "debug", "trace", "actuator", "manager",
             "server-status", "server-info", "elmah", "web.config",
         )
-        if any(blocked in path.lower() for blocked in blocked_paths):
+        # "/admin" is in that list to 404 panel-probing, which is right whenever
+        # no admin surface exists on this origin. In a serverless deployment
+        # there is only one app and the console has nowhere else to live, so the
+        # real prefix is exempted -- and only the real prefix. Everything else
+        # above, "wp-admin" included, still 404s.
+        admin_mounted = settings.SERVERLESS and settings.ADMIN_ENABLED
+        is_admin_surface = admin_mounted and (path == "/admin" or path.startswith("/admin/"))
+        if not is_admin_surface and any(blocked in path.lower() for blocked in blocked_paths):
             return _secure_response(JSONResponse(status_code=404, content={"detail": "Not found"}), path)
 
         user_agent = request.headers.get("user-agent", "")

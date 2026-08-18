@@ -152,11 +152,11 @@ def test_token_never_matches_when_unconfigured(monkeypatch):
 # ── Layer 4: authentication ──────────────────────────────────────────────────
 
 def test_protected_route_requires_a_token(admin_client):
-    assert admin_client.get("/admin/api/session").status_code == 401
+    assert admin_client.get("/api/session").status_code == 401
 
 
 def test_protected_route_accepts_the_correct_token(admin_client):
-    response = admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: TOKEN})
+    response = admin_client.get("/api/session", headers={auth.ADMIN_HEADER: TOKEN})
     assert response.status_code == 200
     assert response.json()["authenticated"] is True
 
@@ -164,14 +164,14 @@ def test_protected_route_accepts_the_correct_token(admin_client):
 @pytest.mark.parametrize("bad", ["", "wrong", TOKEN[:-1], TOKEN + "x", TOKEN.lower()])
 def test_wrong_tokens_are_rejected(admin_client, bad):
     assert admin_client.get(
-        "/admin/api/session", headers={auth.ADMIN_HEADER: bad}
+        "/api/session", headers={auth.ADMIN_HEADER: bad}
     ).status_code == 401
 
 
 def test_failures_are_indistinguishable(admin_client):
     """No response should reveal whether a token was absent, malformed, or close."""
     bodies = {
-        admin_client.get("/admin/api/session", headers=h).text
+        admin_client.get("/api/session", headers=h).text
         for h in ({}, {auth.ADMIN_HEADER: "wrong"}, {auth.ADMIN_HEADER: TOKEN[:-1]})
     }
     assert len(bodies) == 1, f"denial responses differ and leak information: {bodies}"
@@ -188,8 +188,8 @@ def test_admin_has_no_interactive_docs(admin_client):
 def test_repeated_failures_trigger_lockout(admin_client, monkeypatch):
     monkeypatch.setattr(settings, "ADMIN_MAX_FAILURES", 3)
     for _ in range(3):
-        admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: "wrong"})
-    response = admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: "wrong"})
+        admin_client.get("/api/session", headers={auth.ADMIN_HEADER: "wrong"})
+    response = admin_client.get("/api/session", headers={auth.ADMIN_HEADER: "wrong"})
     assert response.status_code == 429
     assert "Retry-After" in response.headers
 
@@ -198,9 +198,9 @@ def test_lockout_blocks_even_the_correct_token(admin_client, monkeypatch):
     """Guessing must not be rescued by getting it right on the next attempt."""
     monkeypatch.setattr(settings, "ADMIN_MAX_FAILURES", 3)
     for _ in range(3):
-        admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: "wrong"})
+        admin_client.get("/api/session", headers={auth.ADMIN_HEADER: "wrong"})
     assert admin_client.get(
-        "/admin/api/session", headers={auth.ADMIN_HEADER: TOKEN}
+        "/api/session", headers={auth.ADMIN_HEADER: TOKEN}
     ).status_code == 429
 
 
@@ -217,9 +217,9 @@ def test_lockout_escalates_with_repeated_rounds(monkeypatch):
 def test_success_clears_the_failure_record(admin_client, monkeypatch):
     monkeypatch.setattr(settings, "ADMIN_MAX_FAILURES", 5)
     for _ in range(3):
-        admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: "wrong"})
+        admin_client.get("/api/session", headers={auth.ADMIN_HEADER: "wrong"})
     assert admin_client.get(
-        "/admin/api/session", headers={auth.ADMIN_HEADER: TOKEN}
+        "/api/session", headers={auth.ADMIN_HEADER: TOKEN}
     ).status_code == 200
     assert auth.lockout_remaining("testclient") == 0
 
@@ -236,14 +236,14 @@ def test_lockout_table_is_bounded():
 
 def test_auth_is_header_based_not_cookie_based(admin_client):
     """A request carrying no ambient credential cannot be driven cross-site."""
-    response = admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: TOKEN})
+    response = admin_client.get("/api/session", headers={auth.ADMIN_HEADER: TOKEN})
     assert response.status_code == 200
     assert "set-cookie" not in {k.lower() for k in response.headers}
 
 
 def test_a_cookie_cannot_authenticate(admin_client):
     admin_client.cookies.set("x-recontitan-admin", TOKEN)
-    assert admin_client.get("/admin/api/session").status_code == 401
+    assert admin_client.get("/api/session").status_code == 401
     admin_client.cookies.clear()
 
 
@@ -255,11 +255,11 @@ def test_a_cookie_cannot_authenticate(admin_client):
     ("Referrer-Policy", "no-referrer"),
 ])
 def test_admin_responses_are_hardened(admin_client, header, expected):
-    assert admin_client.get("/admin/health").headers[header] == expected
+    assert admin_client.get("/health").headers[header] == expected
 
 
 def test_admin_csp_forbids_framing_and_third_party_content(admin_client):
-    csp = admin_client.get("/admin/health").headers["Content-Security-Policy"]
+    csp = admin_client.get("/health").headers["Content-Security-Policy"]
     assert "frame-ancestors 'none'" in csp
     assert "default-src 'self'" in csp
     assert "object-src 'none'" in csp
@@ -267,7 +267,7 @@ def test_admin_csp_forbids_framing_and_third_party_content(admin_client):
 
 def test_admin_responses_are_never_cached(admin_client):
     """Admin data must not linger in a proxy or browser cache."""
-    assert "no-store" in admin_client.get("/admin/health").headers["Cache-Control"]
+    assert "no-store" in admin_client.get("/health").headers["Cache-Control"]
 
 
 # ── Audit integration ────────────────────────────────────────────────────────
@@ -281,6 +281,6 @@ def test_failed_admin_logins_reach_the_audit_trail(admin_client, monkeypatch):
     monkeypatch.setattr(audit.settings, "AUDIT_ENABLED", True)
     monkeypatch.setattr(audit.settings, "AUDIT_FLUSH_SECONDS", 0)
 
-    admin_client.get("/admin/api/session", headers={auth.ADMIN_HEADER: "wrong"})
+    admin_client.get("/api/session", headers={auth.ADMIN_HEADER: "wrong"})
     audit.flush()
     assert any(event["kind"] == "admin.login_failed" for event in captured)

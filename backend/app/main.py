@@ -130,6 +130,22 @@ app.include_router(reports.router)
 app.include_router(news.router)
 app.include_router(test_scan.router)
 
+# On a server deployment the admin console is a separate ASGI app on its own
+# loopback-only port, which is what makes it unreachable from the internet.
+# A serverless platform gives one entry point and no private networking, so
+# there is nowhere else for it to live: mount it here instead. This is a real
+# reduction in isolation -- the console becomes publicly routed and defended by
+# its token alone -- and it is deliberately confined to the serverless case so
+# the stronger separation is never quietly given up on a VPS.
+if settings.SERVERLESS and settings.ADMIN_ENABLED:
+    from app.admin.main import create_admin_app
+
+    app.mount("/admin", create_admin_app(), name="admin-console")
+    logger.warning(
+        "Admin console mounted on the public origin (serverless mode). "
+        "It is protected by ADMIN_TOKEN only; there is no network isolation here."
+    )
+
 
 # ── Health Check ──
 @app.get("/api/health", tags=["system"])

@@ -176,7 +176,7 @@ def test_public_frontend_has_no_scan_history():
 def test_scan_history_is_served_only_from_the_admin_console():
     source = (REPO_ROOT / "backend/app/admin/api.py").read_text(encoding="utf-8")
     assert '@router.get("/scans")' in source
-    assert "/admin/api" in source
+    assert 'prefix="/api"' in source
 
 
 # ── Console wiring ───────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ def test_every_admin_api_route_requires_authentication():
 
     assert router.dependencies, "router must carry a global auth dependency"
     for route in router.routes:
-        assert route.path.startswith("/admin/api/")
+        assert route.path.startswith("/api/")
 
 
 def test_console_page_carries_no_data():

@@ -10,7 +10,7 @@ intended access path is an SSH tunnel:
 
     ssh -N -L 9000:127.0.0.1:9000 root@your-server
 
-then browse http://127.0.0.1:9000/admin/ on your own machine.
+then browse http://127.0.0.1:9000/ on your own machine.
 
 Step 2 provides authentication and isolation only. The dashboard views land in
 step 3 and mount behind :func:`require_admin`.
@@ -68,12 +68,12 @@ def create_admin_app() -> FastAPI:
             del response.headers["server"]
         return response
 
-    @admin_app.get("/admin/health")
+    @admin_app.get("/health")
     def health():
         """Unauthenticated liveness only. Reveals nothing about the system."""
         return {"status": "ok"}
 
-    @admin_app.get("/admin/api/session")
+    @admin_app.get("/api/session")
     def session(source: str = Depends(require_admin)):
         """Confirms a token is valid. Used by the step 3 dashboard to log in."""
         return {
@@ -87,10 +87,9 @@ def create_admin_app() -> FastAPI:
     # "default-src 'self'" already covers them without being widened.
     static_dir = settings.FRONTEND_DIR
     if static_dir.is_dir():
-        admin_app.mount("/admin/static", StaticFiles(directory=str(static_dir)), name="admin-static")
+        admin_app.mount("/static", StaticFiles(directory=str(static_dir)), name="admin-static")
 
-        @admin_app.get("/admin", include_in_schema=False)
-        @admin_app.get("/admin/", include_in_schema=False)
+        @admin_app.get("/", include_in_schema=False)
         def console():
             """The console shell only. It authenticates client-side and then
             calls the protected API, so the page itself carries no data."""

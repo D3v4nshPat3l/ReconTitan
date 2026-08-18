@@ -15,6 +15,8 @@ instead of one long-lived process, and silence is the problem in each case:
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -265,3 +267,92 @@ class _FakeRequest:
     method = "POST"
     headers: dict = {}
     url = type("U", (), {"path": "/api/scan"})()
+
+
+# ── Admin console reachability differs by deployment ─────────────────────────
+
+PROBE = """
+import json, os, sys
+sys.path.insert(0, os.environ["BACKEND"])
+from app.main import app
+from app.admin import auth
+from fastapi.testclient import TestClient
+client = TestClient(app)
+token = {auth.ADMIN_HEADER: "T" * 64}
+print(json.dumps({
+    "console":   client.get("/admin/").status_code,
+    "health":    client.get("/admin/health").status_code,
+    "api_open":  client.get("/admin/api/overview").status_code,
+    "api_auth":  client.get("/admin/api/overview", headers=token).status_code,
+    "wp_admin":  client.get("/wp-admin").status_code,
+    "phpmyadmin":client.get("/phpmyadmin").status_code,
+    "dotenv":    client.get("/.env").status_code,
+}))
+"""
+
+
+def _probe(serverless: bool) -> dict:
+    """Import the app in a clean process for one deployment shape.
+
+    The mount decision happens at import time, so reloading modules in-process
+    leaves other modules holding a stale settings object. A subprocess is the
+    only faithful way to exercise it.
+    """
+    import json
+    import subprocess
+
+    env = {
+        **os.environ,
+        "BACKEND": str(REPO_ROOT / "backend"),
+        "RECONTITAN_SKIP_DOTENV": "1",
+        "ADMIN_ENABLED": "true",
+        "ADMIN_TOKEN": "T" * 64,
+    }
+    env.pop("VERCEL", None)
+    env.pop("SERVERLESS", None)
+    if serverless:
+        env["VERCEL"] = "1"
+
+    result = subprocess.run(
+        [sys.executable, "-c", PROBE], capture_output=True, text=True, env=env, timeout=180,
+    )
+    assert result.returncode == 0, result.stderr[-1500:]
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+def test_admin_console_is_not_on_the_public_origin_on_a_server():
+    """The whole isolation guarantee: no public path reaches admin on a VPS."""
+    codes = _probe(serverless=False)
+    assert codes["console"] == 404
+    assert codes["health"] == 404
+    assert codes["api_open"] == 404
+    assert codes["api_auth"] == 404, "even a valid token must find nothing here"
+
+
+def test_admin_console_is_mounted_when_serverless():
+    """A serverless platform has one origin, so the console has nowhere else."""
+    codes = _probe(serverless=True)
+    assert codes["console"] == 200
+    assert codes["health"] == 200
+    assert codes["api_open"] == 401, "mounted, but still gated"
+    assert codes["api_auth"] == 200
+
+
+def test_panel_probing_is_still_blocked_when_admin_is_mounted():
+    """Exempting the real prefix must not unblock the decoys around it."""
+    codes = _probe(serverless=True)
+    assert codes["wp_admin"] == 404
+    assert codes["phpmyadmin"] == 404
+    assert codes["dotenv"] == 404
+
+
+def test_console_assets_use_relative_paths():
+    """One build has to work at the root and under /admin."""
+    html = (REPO_ROOT / "frontend/admin.html").read_text(encoding="utf-8")
+    assert 'href="static/admin.css"' in html
+    assert 'src="static/admin.js"' in html
+    assert "/admin/static/" not in html
+
+    js = (REPO_ROOT / "frontend/admin.js").read_text(encoding="utf-8")
+    assert "const BASE = window.location.pathname" in js
+    assert "`${BASE}/api/" in js

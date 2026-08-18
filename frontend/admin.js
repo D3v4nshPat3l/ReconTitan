@@ -39,9 +39,15 @@ function fmtAgo(value) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+/* The console is served at the root when it runs as its own process behind an
+   SSH tunnel, and under /admin when a serverless platform forces it onto the
+   public origin. Deriving the base from the page URL keeps one build working
+   in both places. */
+const BASE = window.location.pathname.replace(/\/[^/]*$/, '');
+
 async function api(path, params = {}) {
   const query = new URLSearchParams({ hours: state.window, ...params });
-  const response = await fetch(`/admin/api/${path}?${query}`, {
+  const response = await fetch(`${BASE}/api/${path}?${query}`, {
     headers: { 'X-ReconTitan-Admin': token() },
     cache: 'no-store',
   });

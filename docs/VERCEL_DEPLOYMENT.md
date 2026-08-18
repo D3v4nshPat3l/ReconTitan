@@ -121,7 +121,19 @@ Check the `runtime` block reports `"deployment": "serverless"` and lists the
 unavailable modules. Then open the site, enter the API access key when
 prompted, and run a Recon Only scan against a target you own.
 
-The admin console is at `https://your-domain/admin/`.
+The admin and SOC console is at `https://your-domain/admin/`.
+
+On a server deployment the console runs as its own process on a loopback-only
+port and is never routed publicly — requesting `/admin/` on the public origin
+returns 404, even with a valid token, because the routes are not there at all.
+A serverless platform provides one entry point and no private networking, so
+the console is mounted onto the public origin instead. That mount happens only
+when `SERVERLESS` is set, so the stronger separation is never given up
+accidentally on a VPS.
+
+Panel probing is still refused: `/wp-admin`, `/phpmyadmin`, `/adminer`, `/.env`
+and the rest continue to return 404. Only the real `/admin` prefix is exempt,
+and only while the console is actually mounted.
 
 ## 6 · Restrict the admin console
 
