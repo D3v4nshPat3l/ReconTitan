@@ -160,11 +160,29 @@ Or download the ZIP from GitHub and extract it, then `cd` into the folder.
 python -m venv .venv
 ```
 
+Activation differs by shell. Pick the one you are actually using — the wrong one fails with `command not found`.
+
+**PowerShell or Command Prompt:**
+
 ```bash
 .venv\Scripts\activate
 ```
 
-Your prompt should now start with `(.venv)`. If PowerShell blocks the script, run PowerShell as Administrator once:
+**Git Bash / MINGW64:**
+
+```bash
+source .venv/Scripts/activate
+```
+
+Git Bash is a POSIX shell, so it needs forward slashes and `source`. Using the PowerShell form there collapses the backslashes and produces `bash: .venvScriptsactivate: command not found`. Note it is still `.venv/Scripts/` on Windows even in Git Bash — not `.venv/bin/`, which is the Linux and macOS layout.
+
+Your prompt should now start with `(.venv)`. Confirm the right interpreter is active:
+
+```bash
+python -c "import sys; print(sys.prefix)"
+```
+
+If PowerShell blocks the activation script, run PowerShell as Administrator once:
 
 ```bash
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -173,16 +191,34 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 **4. Install dependencies**
 
 ```bash
+python -m pip install --upgrade pip
+```
+
+```bash
 pip install -r backend/requirements.txt
 ```
 
 **5. Create your environment file**
 
+`.env` is gitignored, so a fresh clone never contains one and every setting falls back to its built-in default — including `ALLOW_DANGER_MODE=false`. That is why Danger Mode is rejected on a new clone until you do this step.
+
+**PowerShell or Command Prompt:**
+
 ```bash
 copy .env.example .env
 ```
 
-The defaults are safe for local use. Nothing needs editing to get started.
+**Git Bash / MINGW64, Linux, macOS:**
+
+```bash
+cp .env.example .env
+```
+
+Verify it landed and check the setting:
+
+```bash
+grep ALLOW_DANGER_MODE .env
+```
 
 **6. Start it**
 
