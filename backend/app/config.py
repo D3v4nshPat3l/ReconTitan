@@ -137,6 +137,11 @@ class Settings:
         self.SECURITYTRAILS_API_KEY = os.getenv("SECURITYTRAILS_API_KEY", "")
         self.URLSCAN_API_KEY = os.getenv("URLSCAN_API_KEY", "")
         self.INTELX_API_KEY = os.getenv("INTELX_API_KEY", "")
+        # NVD allows 5 requests per 30s unkeyed and 50 with a free key. Without
+        # one, exceeding the limit returns 403s that look identical to "no
+        # vulnerabilities found", so a key materially improves CVE accuracy.
+        self.NVD_API_KEY = os.getenv("NVD_API_KEY", "").strip()
+        self.NVD_MAX_PRODUCTS = _env_int("NVD_MAX_PRODUCTS", 5, minimum=1)
 
         # Tool timeouts / bounded workload
         self.SCAN_TIMEOUT_NMAP = _env_int("SCAN_TIMEOUT_NMAP", 300, minimum=1)

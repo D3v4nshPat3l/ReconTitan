@@ -168,6 +168,32 @@ def run_sqlmap_check(target: str) -> list[dict]:
     return findings
 
 
+def extract_cvss(metrics: dict) -> tuple[float, str, str]:
+    """Return (score, vector, severity) preferring CVSS v3.1, then v3.0, then v2.
+
+    The previous chain defaulted each lookup to ``[{}]``, which is a non-empty
+    list and therefore truthy, so the ``or`` stopped at the first branch and
+    v3.0/v2 were never consulted. Every CVE without v3.1 data scored 0.0 and
+    was reported as "low" -- including genuinely high-severity older CVEs.
+    """
+    for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+        entries = metrics.get(key) or []
+        for entry in entries:
+            data = entry.get("cvssData") or {}
+            score = data.get("baseScore")
+            if score is None:
+                continue
+            score = float(score)
+            severity = (
+                "critical" if score >= 9 else
+                "high" if score >= 7 else
+                "medium" if score >= 4 else
+                "low" if score > 0 else "info"
+            )
+            return score, str(data.get("vectorString", "")), severity
+    return 0.0, "", "info"
+
+
 def run_nvd_cve_lookup(tech_name: str, version: str = "") -> list[dict]:
     """Query NVD API for CVEs matching a technology name/version. Free, no key needed."""
     findings = []
@@ -186,12 +212,7 @@ def run_nvd_cve_lookup(tech_name: str, version: str = "") -> list[dict]:
             cve_id = cve.get("id", "")
             descs = cve.get("descriptions", [])
             desc  = next((d["value"] for d in descs if d["lang"] == "en"), "")
-            metrics = cve.get("metrics", {})
-            cvss_data = (metrics.get("cvssMetricV31", [{}]) or
-                         metrics.get("cvssMetricV30", [{}]) or
-                         metrics.get("cvssMetricV2",  [{}]))
-            score = cvss_data[0].get("cvssData", {}).get("baseScore", 0.0) if cvss_data else 0.0
-            sev   = "critical" if score >= 9 else "high" if score >= 7 else "medium" if score >= 4 else "low"
+            score, _vector, sev = extract_cvss(cve.get("metrics", {}))
             findings.append({
                 "tool":"nvd_cve","category":"cve_finding","severity":sev,
                 "title":f"Potential CVE Match: {cve_id} (CVSS {score}) — {tech_name}",

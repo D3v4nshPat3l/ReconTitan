@@ -158,6 +158,8 @@ services:
       SECURITYTRAILS_API_KEY: ${SECURITYTRAILS_API_KEY:-}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
       INTELX_API_KEY: ${INTELX_API_KEY:-}
+      NVD_API_KEY: ${NVD_API_KEY:-}
+      NVD_MAX_PRODUCTS: ${NVD_MAX_PRODUCTS:-5}
     depends_on:
       redis:
         condition: service_healthy
@@ -236,6 +238,8 @@ services:
       SECURITYTRAILS_API_KEY: ${SECURITYTRAILS_API_KEY:-}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
       INTELX_API_KEY: ${INTELX_API_KEY:-}
+      NVD_API_KEY: ${NVD_API_KEY:-}
+      NVD_MAX_PRODUCTS: ${NVD_MAX_PRODUCTS:-5}
     depends_on:
       redis:
         condition: service_healthy

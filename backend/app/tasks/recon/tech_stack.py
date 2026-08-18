@@ -124,6 +124,14 @@ def run_tech_stack_detection(target: str) -> list[dict]:
                 "HTML metadata, cookies, and referenced assets."
             ),
             "evidence": "\n".join(evidence_lines),
+            # Structured form for CVE matching. Recovering the product and
+            # version by re-parsing this evidence string with a regex was
+            # fragile and silently lost the version whenever the human-readable
+            # format changed.
+            "technologies": [
+                {"name": name, "category": category, "version": version}
+                for name, category, version, _source in detected
+            ],
             "remediation": "Remove unnecessary version disclosure and keep every detected component patched.",
         })
 
