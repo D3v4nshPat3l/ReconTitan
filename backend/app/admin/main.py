@@ -22,54 +22,18 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.admin import auth
+from app.admin.deps import (
+    ADMIN_LOCKED_OUT, ADMIN_LOGIN_FAILED, ADMIN_LOGIN_OK, require_admin,
+)
 from app.config import settings
+from app.admin.api import router as admin_api_router
 from app.services import audit
 
 logger = logging.getLogger("recontitan.admin")
-
-ADMIN_LOGIN_FAILED = "admin.login_failed"
-ADMIN_LOGIN_OK = "admin.login_ok"
-ADMIN_LOCKED_OUT = "admin.locked_out"
-
-
-def _source(request: Request) -> str:
-    return audit.client_ip(request)
-
-
-def require_admin(request: Request) -> str:
-    """Authenticate an admin request or refuse it.
-
-    Every outcome is audited. An attack on the admin surface should be the
-    most visible thing in the trail, not the quietest.
-    """
-    source = _source(request)
-
-    remaining = auth.lockout_remaining(source)
-    if remaining > 0:
-        audit.record_security_event(ADMIN_LOCKED_OUT, request, detail=f"{remaining:.0f}s left")
-        raise HTTPException(
-            status_code=429,
-            detail=auth.GENERIC_DENIAL,
-            headers={"Retry-After": str(int(remaining) + 1)},
-        )
-
-    supplied = request.headers.get(auth.ADMIN_HEADER, "")
-    if not auth.token_matches(supplied):
-        lockout = auth.register_failure(source)
-        audit.record_security_event(
-            ADMIN_LOGIN_FAILED, request,
-            detail="locked out" if lockout > 0 else "bad token",
-        )
-        logger.warning("[admin] failed authentication from %s", source)
-        # Identical response for missing, malformed, and wrong tokens.
-        raise HTTPException(status_code=401, detail=auth.GENERIC_DENIAL)
-
-    auth.reset(source)
-    return source
-
 
 def create_admin_app() -> FastAPI:
     """Build the admin app, refusing to start if it would be unprotected."""
@@ -118,6 +82,21 @@ def create_admin_app() -> FastAPI:
             "server_time": datetime.now(timezone.utc),
             "version": settings.APP_VERSION,
         }
+
+    # Console assets are served from /admin/static so the CSP's
+    # "default-src 'self'" already covers them without being widened.
+    static_dir = settings.FRONTEND_DIR
+    if static_dir.is_dir():
+        admin_app.mount("/admin/static", StaticFiles(directory=str(static_dir)), name="admin-static")
+
+        @admin_app.get("/admin", include_in_schema=False)
+        @admin_app.get("/admin/", include_in_schema=False)
+        def console():
+            """The console shell only. It authenticates client-side and then
+            calls the protected API, so the page itself carries no data."""
+            return FileResponse(str(static_dir / "admin.html"), headers={"Cache-Control": "no-store"})
+
+    admin_app.include_router(admin_api_router)
 
     @admin_app.exception_handler(HTTPException)
     async def _generic_errors(request: Request, exc: HTTPException):

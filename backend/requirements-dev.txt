@@ -4,3 +4,4 @@ pytest-cov==7.0.0
 pip-audit==2.9.0
 bandit==1.8.6
 ruff==0.12.5
+mongomock>=4.1.2

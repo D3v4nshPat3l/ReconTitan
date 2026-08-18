@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>ReconTitan — SOC Console</title>
+<link rel="icon" href="/admin/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+
+<div id="lock" class="lock">
+  <div class="lock-card">
+    <div class="lock-brand"><span class="diamond"></span> RECON<b>TITAN</b> <span class="lock-tag">SOC</span></div>
+    <p class="lock-note">Restricted console. This surface is not routed publicly and is reachable only over an SSH tunnel.</p>
+    <label class="lock-label" for="token">ADMIN TOKEN</label>
+    <input id="token" class="lock-input" type="password" autocomplete="off" spellcheck="false" placeholder="paste admin token">
+    <button id="unlock" class="lock-btn" type="button">AUTHENTICATE →</button>
+    <p id="lockErr" class="lock-err" hidden></p>
+  </div>
+</div>
+
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="diamond"></span> RECON<b>TITAN</b> <span class="badge">SOC CONSOLE</span></div>
+    <nav class="nav">
+      <button class="nav-a is-on" data-view="overview">Overview</button>
+      <button class="nav-a" data-view="threats">Threats</button>
+      <button class="nav-a" data-view="events">Event Feed</button>
+      <button class="nav-a" data-view="scans">Scan Activity</button>
+      <button class="nav-a" data-view="targets">Targets</button>
+    </nav>
+    <div class="topbar-right">
+      <select id="window" class="win-select" aria-label="Time window">
+        <option value="1">1h</option><option value="6">6h</option>
+        <option value="24" selected>24h</option><option value="168">7d</option><option value="720">30d</option>
+      </select>
+      <span class="live"><span class="live-dot"></span><span id="liveLabel">LIVE</span></span>
+      <button id="logout" class="logout" type="button">LOCK</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="view" data-view="overview">
+      <div class="kpis" id="kpis"></div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-hdr"><span class="tag">// TRAFFIC VOLUME</span><h2>Hostile vs normal, hourly</h2></div>
+          <div id="timeline" class="timeline"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-hdr"><span class="tag">// ATTACK CLASSES</span><h2>What is being blocked</h2></div>
+          <div id="classes" class="classes"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-hdr"><span class="tag">// TOP SOURCES</span><h2>Most hostile activity</h2></div>
+        <div id="topThreats" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="threats" hidden>
+      <div class="panel">
+        <div class="panel-hdr"><span class="tag">// THREAT SOURCES</span><h2>Ranked by blocked volume</h2></div>
+        <div id="threatTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="events" hidden>
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="tag">// EVENT FEED</span><h2>Raw security events, newest first</h2>
+          <div class="filters">
+            <select id="kindFilter" class="win-select"><option value="">all kinds</option></select>
+            <input id="ipFilter" class="filter-input" placeholder="filter by source IP" spellcheck="false">
+          </div>
+        </div>
+        <div id="eventTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="scans" hidden>
+      <div class="panel">
+        <div class="panel-hdr"><span class="tag">// SCAN ACTIVITY</span><h2>Every scan, with attribution</h2></div>
+        <div id="scanTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="targets" hidden>
+      <div class="panel">
+        <div class="panel-hdr"><span class="tag">// TARGETS</span><h2>Most-scanned targets and their sources</h2></div>
+        <div id="targetTable" class="table-wrap"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/admin/static/admin.js"></script>
+</body>
+</html>

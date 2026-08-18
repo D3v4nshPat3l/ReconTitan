@@ -52,13 +52,6 @@ const DANGER_PHRASE = 'I am authorized';
 let dangerUnlocked = false;
 let dangerEnabledOnServer = null;
 
-let historyData = [];
-try {
-  const parsed = JSON.parse(localStorage.getItem('rt_history') || '[]');
-  historyData = Array.isArray(parsed) ? parsed.slice(0, 100) : [];
-} catch (_) {
-  historyData = [];
-}
 let scanCount = Number.parseInt(localStorage.getItem('rt_scan_count') || '0', 10) || 0;
 let selectedProfile = localStorage.getItem('rt_scan_profile') || 'full';
 // The danger gate is deliberately never restored from storage: the operator
@@ -230,23 +223,9 @@ async function startScan() {
     if (data.ai_summary?.risk_level) addLog(`AI risk level: ${data.ai_summary.risk_level}`);
     logDangerTelemetry(data.danger_summary);
 
-    const severity = data.severity_counts || {};
-    historyData.unshift({
-      id: data.scan_id,
-      target: data.target || target,
-      profile: data.scan_type || selectedProfile,
-      findings: data.total_findings,
-      critical: severity.critical || 0,
-      high: severity.high || 0,
-      date: new Date().toLocaleString(),
-    });
-    historyData = historyData.slice(0, 100);
-    localStorage.setItem('rt_history', JSON.stringify(historyData));
-
     scanCount += 1;
     localStorage.setItem('rt_scan_count', String(scanCount));
     document.getElementById('hsScans').textContent = String(scanCount);
-    renderHistory();
 
     sessionStorage.setItem('rt_scan_target', data.target || target);
     sessionStorage.setItem('rt_scan_profile', data.scan_type || selectedProfile);
@@ -287,35 +266,6 @@ function profileLabel(profile) {
   return ({ full: 'FULL', recon_only: 'RECON', osint_only: 'OSINT', vuln_only: 'VULN', danger: 'DANGER' })[profile] || 'FULL';
 }
 
-function renderHistory() {
-  const tbody = document.getElementById('historyBody');
-  if (!historyData.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="history-empty">No scans yet. Enter an authorized public target above.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = historyData.map((item, index) => `
-    <tr>
-      <td class="h-target">${esc(item.target)}</td>
-      <td class="h-profile">${esc(profileLabel(item.profile))}</td>
-      <td>${esc(item.findings || 0)}</td>
-      <td class="h-critical">${esc(item.critical || 0)}</td>
-      <td class="h-high">${esc(item.high || 0)}</td>
-      <td>${esc(item.date || '')}</td>
-      <td><button class="h-btn" type="button" data-history-index="${index}">RESCAN →</button></td>
-    </tr>`).join('');
-}
-
-document.getElementById('historyBody').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-history-index]');
-  if (!button) return;
-  const item = historyData[Number(button.dataset.historyIndex)];
-  if (!item?.target) return;
-  targetInput.value = item.target;
-  selectProfile(item.profile || 'full');
-  document.getElementById('scanner').scrollIntoView({ behavior: 'smooth' });
-  targetInput.focus();
-});
-renderHistory();
 
 async function loadCapabilities() {
   try {

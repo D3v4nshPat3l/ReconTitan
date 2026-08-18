@@ -211,12 +211,8 @@ def get_scan_report_pdf(scan_id: str):
     )
 
 
-@router.get("/scans")
-def list_scans(limit: int = Query(default=20, ge=1, le=100)):
-    db = get_db()
-    if db is not None:
-        cursor = db["scans"].find({}, {"_id": 0, "findings": 0}).sort("created_at", -1).limit(limit)
-        return {"scans": list(cursor)}
-    scans = list(_active_scans.values())[-limit:]
-    scans.reverse()
-    return {"scans": scans}
+# Scan history is deliberately not exposed here. The former GET /api/scans let
+# any holder of the shared access key enumerate every target anyone had ever
+# scanned, which the shared-key model was never meant to authorise. It now
+# lives on the isolated admin console as GET /admin/api/scans, served with
+# attribution to an authenticated operator over an SSH tunnel.
