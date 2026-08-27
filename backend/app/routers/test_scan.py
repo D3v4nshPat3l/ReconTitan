@@ -150,7 +150,28 @@ def test_scan(
         danger_stage_names = {name for name, _ in danger_tools}
         tools = tools + list(danger_tools)
 
-    for tool_name, tool_fn in tools:
+    # Wall-clock ceiling for the whole scan. Without it the loop runs every tool
+    # to completion and a serverless platform kills the request part-way, so the
+    # caller gets a 500 and loses every finding already gathered. Stopping here
+    # keeps them: the remaining stages are recorded as skipped and the report is
+    # still produced, which is the behaviour the UI advertises.
+    budget_seconds = settings.MAX_SYNC_SCAN_SECONDS
+    skipped_for_time: list[str] = []
+
+    for index, (tool_name, tool_fn) in enumerate(tools):
+        if budget_seconds and time.monotonic() - start >= budget_seconds:
+            skipped_for_time = [name for name, _ in tools[index:]]
+            for name in skipped_for_time:
+                tool_results[name] = {"status": "skipped", "reason": "time_limit", "findings": 0}
+                if danger_session is not None and name in danger_stage_names:
+                    if name not in danger_session.stages_skipped:
+                        danger_session.stages_skipped.append(name)
+            logger.warning(
+                "[test] %s: %.1fs budget reached, skipping %d of %d stages",
+                target, budget_seconds, len(skipped_for_time), len(tools),
+            )
+            break
+
         tool_start = time.monotonic()
         try:
             results = tool_fn(target) or []
@@ -199,6 +220,8 @@ def test_scan(
     explain_findings_bulk(all_findings)
 
     payload = {
+        "time_limited": bool(skipped_for_time),
+        "stages_skipped_for_time": skipped_for_time,
         "scan_id": scan_id,
         "target": target,
         "scan_type": scan_type.value,

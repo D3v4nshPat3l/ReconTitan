@@ -87,14 +87,18 @@ app.add_middleware(SecurityMiddleware)
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Catch all unhandled exceptions. Log full trace, return sanitized response."""
+    # The traceback goes to the server log unconditionally. It used to be gated
+    # on DEBUG, which meant production -- the only place these are hard to
+    # reproduce -- logged one line with no file, no line number and no stack.
+    # The response below is what stays sanitized; the log is not user-facing.
     logger.error(
-        "[UNHANDLED] %s %s — %s",
+        "[UNHANDLED] %s %s — %s: %s\n%s",
         request.method,
         request.url.path,
+        type(exc).__name__,
         str(exc),
+        traceback.format_exc(),
     )
-    if settings.DEBUG:
-        logger.error(traceback.format_exc())
     return JSONResponse(
         status_code=500,
         content={"error": "Internal server error. This has been logged."},

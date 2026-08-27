@@ -277,3 +277,28 @@ def test_headers_that_override_routing_are_blocked_everywhere(security):
     for header in ("x-original-url", "x-rewrite-url", "x-host", "x-custom-ip-authorization"):
         assert header in security.DANGEROUS_HEADERS
     assert "x-forwarded-host" not in security.DANGEROUS_HEADERS,         "it is proxy-set, and must be validated rather than blanket-refused"
+
+
+# ── Synchronous scan deadline ───────────────────────────────────────────────
+
+def test_serverless_gets_a_scan_deadline_by_default(monkeypatch):
+    """Without one the loop runs every tool and the platform kills the request
+    part-way, so the caller gets a 500 and every finding already gathered is
+    thrown away with the unwritten response.
+    """
+    monkeypatch.setenv("VERCEL", "1")
+    settings = Settings()
+    assert settings.MAX_SYNC_SCAN_SECONDS > 0
+    assert settings.MAX_SYNC_SCAN_SECONDS < 60, \
+        "the ceiling must leave room to summarise and serialise inside a 60s function"
+
+
+def test_a_server_deployment_has_no_deadline(monkeypatch):
+    """Celery workers have no wall clock to fit inside, so nothing is skipped."""
+    assert Settings().MAX_SYNC_SCAN_SECONDS == 0
+
+
+def test_the_deadline_is_overridable(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.setenv("MAX_SYNC_SCAN_SECONDS", "20")
+    assert Settings().MAX_SYNC_SCAN_SECONDS == 20

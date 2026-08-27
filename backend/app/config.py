@@ -319,6 +319,20 @@ class Settings:
         # recorded as the platform's own proxy address, making the audit trail
         # useless for attribution -- so it defaults on there, and only there.
         self.TRUST_PROXY_HEADERS = _env_bool("TRUST_PROXY_HEADERS", self.SERVERLESS)
+
+        # Wall-clock ceiling for a synchronous scan, in seconds. 0 means none.
+        #
+        # A serverless platform kills the function at its own limit and the
+        # caller gets a 500 with nothing in it -- every tool that already ran is
+        # thrown away because the response was never written. Stopping first and
+        # returning a partial report is strictly better: the findings gathered so
+        # far survive, and the skipped stages are named in the report.
+        #
+        # The default leaves room under a 60s function limit for the AI summary
+        # and for serialising the response after the last tool returns.
+        self.MAX_SYNC_SCAN_SECONDS = _env_int(
+            "MAX_SYNC_SCAN_SECONDS", 45 if self.SERVERLESS else 0, minimum=0
+        )
         # Share rate-limit and lockout counters through Redis. Required for any
         # multi-instance deployment; harmless on a single node.
         self.SHARED_STATE_ENABLED = _env_bool("SHARED_STATE_ENABLED", bool(self.REDIS_PASSWORD or os.getenv("REDIS_URL")))
