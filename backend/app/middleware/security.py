@@ -545,11 +545,40 @@ BLOCKED_UA = re.compile(
     re.IGNORECASE,
 )
 
-# Dangerous headers that shouldn't be in requests
+# Headers nothing legitimate sets. These override the routed path or the
+# authenticated source, so their presence is the attack.
 DANGEROUS_HEADERS = [
-    "x-original-url", "x-rewrite-url", "x-forwarded-host",
-    "x-forwarded-server", "x-host", "x-custom-ip-authorization",
+    "x-original-url", "x-rewrite-url", "x-host", "x-custom-ip-authorization",
 ]
+
+# Headers a reverse proxy sets on every request it forwards. Where one is in
+# front, blanket-rejecting these rejects all traffic -- on Vercel the edge
+# attaches x-forwarded-host to every request, so the whole deployment returned
+# 400. Where nothing is in front they are still forgery, and still blocked.
+PROXY_SET_HEADERS = ["x-forwarded-host", "x-forwarded-server"]
+
+
+def _host_is_trusted(host: str) -> bool:
+    """Match a hostname against TRUSTED_HOSTS, honouring Starlette's wildcards.
+
+    Same matching TrustedHostMiddleware applies, so a value accepted here is
+    one that would be accepted as a Host header too.
+    """
+    host = host.split(",", 1)[0].strip().lower()
+    if not host:
+        return False
+    if not host.startswith("["):           # strip :port, but not from IPv6
+        host = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+    for pattern in settings.TRUSTED_HOSTS:
+        if pattern == "*":
+            return True
+        if pattern.startswith("*.") and (
+            host == pattern[2:] or host.endswith(pattern[1:])
+        ):
+            return True
+        if host == pattern:
+            return True
+    return False
 
 # ═══════════════════════════════════════════════════════════
 # HELPER: stamp security headers onto any early-exit response
@@ -702,6 +731,19 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             if dangerous in lower_headers:
                 logger.warning("[BLOCK] dangerous header: %s", dangerous)
                 return _secure_response(JSONResponse(status_code=400, content={"error": "Bad request"}), path)
+
+        if settings.TRUST_PROXY_HEADERS:
+            # The proxy in front sets these. Trust the header, not its contents:
+            # a forwarded host outside TRUSTED_HOSTS is still host injection.
+            forwarded_host = request.headers.get("x-forwarded-host", "")
+            if forwarded_host and not _host_is_trusted(forwarded_host):
+                logger.warning("[BLOCK] untrusted x-forwarded-host: %s", forwarded_host[:80])
+                return _secure_response(JSONResponse(status_code=400, content={"error": "Bad request"}), path)
+        else:
+            for spoofed in PROXY_SET_HEADERS:
+                if spoofed in lower_headers:
+                    logger.warning("[BLOCK] dangerous header: %s", spoofed)
+                    return _secure_response(JSONResponse(status_code=400, content={"error": "Bad request"}), path)
 
         if path != "/api/health":
             limited = rate_limiter.check(request)

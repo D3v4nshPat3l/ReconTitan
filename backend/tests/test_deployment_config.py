@@ -202,3 +202,52 @@ def test_a_blank_boolean_var_keeps_its_default(monkeypatch):
     assert _env_bool("SOME_FLAG", True) is True
     monkeypatch.setenv("SOME_FLAG", "false")
     assert _env_bool("SOME_FLAG", True) is False
+
+
+# ── Proxy-set headers ───────────────────────────────────────────────────────
+#
+# These assert against the live settings object rather than reloading the
+# config module: a reload swaps `settings` while every module that already
+# imported it keeps the old one, and the mismatch leaks into later tests.
+
+VERCEL_HOSTS = ["*.vercel.app", "localhost", "recon-titan.vercel.app"]
+
+
+@pytest.fixture()
+def security(monkeypatch):
+    from app.middleware import security as module
+
+    # Patch the settings object this module actually holds. An earlier reload
+    # of app.config leaves it bound to the previous instance, so patching
+    # app.config.settings here would patch something nothing reads.
+    monkeypatch.setattr(module.settings, "TRUSTED_HOSTS", VERCEL_HOSTS, raising=False)
+    return module
+
+
+def test_the_platform_host_is_accepted_behind_a_proxy(security):
+    """Vercel's edge attaches x-forwarded-host to every request it forwards.
+
+    Blanket-rejecting the header returned 400 for the entire deployment, so
+    behind a trusted proxy the value is validated rather than the header
+    refused.
+    """
+    assert security._host_is_trusted("recon-titan.vercel.app")
+    assert security._host_is_trusted("recon-titan-abc123-team.vercel.app"),         "preview deployments get generated subdomains and must still work"
+    assert security._host_is_trusted("recon-titan.vercel.app:443"), "a port must not break the match"
+
+
+def test_an_untrusted_forwarded_host_is_still_rejected(security):
+    assert not security._host_is_trusted("evil.com")
+    assert not security._host_is_trusted(""), "an empty forwarded host is not a trusted one"
+
+
+def test_a_wildcard_does_not_match_a_lookalike_suffix(security):
+    """*.vercel.app must not match attacker.vercel.app.evil.com."""
+    assert not security._host_is_trusted("attacker.vercel.app.evil.com")
+
+
+def test_headers_that_override_routing_are_blocked_everywhere(security):
+    """These are forgery regardless of what sits in front."""
+    for header in ("x-original-url", "x-rewrite-url", "x-host", "x-custom-ip-authorization"):
+        assert header in security.DANGEROUS_HEADERS
+    assert "x-forwarded-host" not in security.DANGEROUS_HEADERS,         "it is proxy-set, and must be validated rather than blanket-refused"
