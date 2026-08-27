@@ -5,7 +5,9 @@ from urllib.parse import quote
 
 logger = logging.getLogger("recontitan.recon.wayback")
 
-TIMEOUT = 15
+# web.archive.org is frequently unreachable, and a 15s connect timeout
+# spent a quarter of the serverless request budget waiting to find out.
+TIMEOUT = 5
 
 def run_wayback(target: str) -> list[dict]:
     """
@@ -35,7 +37,7 @@ def run_wayback(target: str) -> list[dict]:
     historical_urls = []
     try:
         cdx_resp = requests.get(
-            "http://web.archive.org/cdx/search/cdx",
+            "https://web.archive.org/cdx/search/cdx",
             params={
                 "url":      f"*.{domain}/*",
                 "output":   "json",

@@ -1,11 +1,15 @@
 """DNS record enumeration for ReconTitan recon pipeline."""
 import logging
 import dns.resolver
+from concurrent.futures import ThreadPoolExecutor
 import dns.exception
 
 logger = logging.getLogger("recontitan.recon.dns")
 
 RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"]
+
+# A resolver that has not answered in this long is not going to.
+DNS_LIFETIME = 4
 
 def run_dns_lookup(target: str) -> list[dict]:
     """
@@ -17,15 +21,24 @@ def run_dns_lookup(target: str) -> list[dict]:
     findings = []
     all_records = {}
 
-    for rtype in RECORD_TYPES:
+    # Seven record types, each waiting on a different server. Sequentially at
+    # lifetime=8 a domain with two unanswered types spends 16 seconds doing
+    # nothing, which is most of the budget on a platform that kills the request
+    # at 60. They do not depend on each other, so they are asked at once and the
+    # whole step costs one lifetime rather than seven.
+    def _resolve(rtype: str) -> tuple[str, list[str]]:
         try:
-            answers = dns.resolver.resolve(domain, rtype, lifetime=8)
-            all_records[rtype] = [str(r) for r in answers]
+            answers = dns.resolver.resolve(domain, rtype, lifetime=DNS_LIFETIME)
+            return rtype, [str(r) for r in answers]
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
-            all_records[rtype] = []
+            return rtype, []
         except Exception as e:
             logger.debug("[dns] %s %s: %s", rtype, domain, e)
-            all_records[rtype] = []
+            return rtype, []
+
+    with ThreadPoolExecutor(max_workers=len(RECORD_TYPES)) as pool:
+        for rtype, records in pool.map(_resolve, RECORD_TYPES):
+            all_records[rtype] = records
 
     # Build evidence
     evidence_lines = []
@@ -64,7 +77,7 @@ def run_dns_lookup(target: str) -> list[dict]:
 
     # ── DMARC check ──
     try:
-        dmarc_answers = dns.resolver.resolve(f"_dmarc.{domain}", "TXT", lifetime=8)
+        dmarc_answers = dns.resolver.resolve(f"_dmarc.{domain}", "TXT", lifetime=DNS_LIFETIME)
         dmarc_records = [str(r) for r in dmarc_answers]
     except Exception:
         dmarc_records = []
