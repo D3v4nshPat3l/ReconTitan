@@ -1,5 +1,7 @@
 """robots.txt and sitemap.xml analysis for the OSINT phase."""
 import logging
+import warnings
+
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
@@ -25,6 +27,22 @@ SENSITIVE_PATHS = [
     "phpinfo", "info.php",
 ]
 
+def _xml_parser() -> str:
+    """Pick an XML parser that is actually installed.
+
+    BeautifulSoup's "xml" feature requires lxml, which was never declared in
+    requirements.txt. The resulting FeatureNotFound was swallowed by the broad
+    except below, so sitemap analysis silently produced nothing on every
+    deployment built from that file. html.parser is stdlib and extracts <loc>
+    elements perfectly well, so it is the fallback rather than a hard failure.
+    """
+    try:
+        import lxml  # noqa: F401
+    except ImportError:
+        return "html.parser"
+    return "xml"
+
+
 def run_robots_sitemap(target: str) -> list[dict]:
     """Fetch and analyze robots.txt and sitemap.xml."""
     domain = normalize_target(target)
@@ -36,7 +54,12 @@ def run_robots_sitemap(target: str) -> list[dict]:
         robots_url  = urljoin(base_url, "/robots.txt")
         resp = safe_get(robots_url, timeout=TIMEOUT, max_bytes=256 * 1024)
 
-        if resp.status_code == 200 and "text" in resp.headers.get("Content-Type", ""):
+        # "text" also matches text/html, so a host answering /robots.txt with a
+        # 200 HTML error page was parsed as a robots file and reported as
+        # "0 Disallow entries" -- a real-looking finding derived from an error
+        # page. robots.txt is text/plain by specification.
+        content_type = resp.headers.get("Content-Type", "").lower()
+        if resp.status_code == 200 and content_type.startswith("text/plain"):
             lines = resp.text.strip().split("\n")
             disallow_paths = []
             allow_paths    = []
@@ -107,7 +130,18 @@ def run_robots_sitemap(target: str) -> list[dict]:
         resp = safe_get(sitemap_url, timeout=TIMEOUT, max_bytes=1024 * 1024)
 
         if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, "xml")
+            parser = _xml_parser()
+            with warnings.catch_warnings():
+                # Feeding XML to html.parser is deliberate here (see
+                # _xml_parser); bs4's advisory warning would otherwise fire on
+                # every sitemap fetch.
+                try:
+                    from bs4 import XMLParsedAsHTMLWarning
+
+                    warnings.simplefilter("ignore", XMLParsedAsHTMLWarning)
+                except ImportError:  # older bs4 without the warning class
+                    warnings.simplefilter("ignore", UserWarning)
+                soup = BeautifulSoup(resp.text, parser)
             urls = [loc.text.strip() for loc in soup.find_all("loc")]
 
             # Find interesting paths in sitemap

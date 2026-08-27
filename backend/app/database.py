@@ -41,6 +41,15 @@ def get_db() -> Any:
             serverSelectionTimeoutMS=2500,
             connectTimeoutMS=2500,
             socketTimeoutMS=5000,
+            # Mongo stores every datetime in UTC, but pymongo hands them back
+            # *naive* by default. Serialized to JSON that produced
+            # "2026-08-26T12:25:23" with no offset, and `new Date()` in the
+            # browser reads an offset-less string as local time — so every
+            # timestamp in the console was displayed shifted by the viewer's UTC
+            # offset, 5.5 hours in IST. tz_aware returns them UTC-aware, so the
+            # marker survives into JSON and the browser converts instead of
+            # guessing.
+            tz_aware=True,
         )
         _client.admin.command("ping")
         _db = _client[settings.MONGO_DB]

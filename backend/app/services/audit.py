@@ -48,7 +48,14 @@ INJECTION_BLOCKED = "injection.blocked"
 RATE_LIMITED = "ratelimit.exceeded"
 BLOCKED_AGENT = "agent.blocked"
 
-COALESCED_KINDS = frozenset({AUTH_FAILED, INJECTION_BLOCKED, RATE_LIMITED, BLOCKED_AGENT})
+#: Ordinary, successful access. Not an attack -- this is what makes the console
+#: show *everyone* using the service rather than only the people attacking it.
+#: Necessarily the highest-volume kind, so it is coalesced like the rest.
+ACCESS = "http.access"
+
+COALESCED_KINDS = frozenset(
+    {AUTH_FAILED, INJECTION_BLOCKED, RATE_LIMITED, BLOCKED_AGENT, ACCESS}
+)
 
 _COLLECTION = "audit_events"
 
@@ -73,15 +80,95 @@ def _clip(value: Any, limit: int) -> str:
 def client_ip(request: Any) -> str:
     """Resolve the real client address.
 
-    uvicorn runs with ``--proxy-headers --forwarded-allow-ips``, so behind the
-    Compose nginx ``request.client.host`` is already the rewritten client
-    address rather than the proxy's. Reading the raw forwarding headers here
-    would instead trust a value the client can set.
+    Behind the Compose nginx, uvicorn runs with ``--proxy-headers
+    --forwarded-allow-ips`` and has already rewritten ``request.client``, so the
+    forwarding headers are ignored: reading them there would mean trusting a
+    value the client sets, letting anyone forge their own source address in the
+    audit trail.
+
+    A serverless platform has no such rewrite. ``request.client`` is the
+    platform's internal proxy, identical for every visitor, which would reduce
+    the whole trail to one repeated address. ``TRUST_PROXY_HEADERS`` (default on
+    only under ``SERVERLESS``) opts into the header instead. The leftmost entry
+    is the originating client; the rest are proxies appended along the way.
+    """
+    direct = "unknown"
+    try:
+        if request.client:
+            direct = request.client.host
+    except Exception:
+        pass
+
+    if not settings.TRUST_PROXY_HEADERS:
+        return direct
+
+    try:
+        forwarded = request.headers.get("x-forwarded-for", "")
+    except Exception:
+        return direct
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        # Bound it: the header is attacker-controlled even when trusted, and an
+        # oversized value must not reach storage or a rendered table.
+        if first and len(first) <= 64:
+            return first
+    return direct
+
+
+#: Request headers recorded to help group requests from one origin. Every one
+#: is client-controlled and trivially forged, which is why they are stored as
+#: observations and never trusted as identity.
+_CLIENT_HINT_HEADERS = (
+    ("accept_language", "accept-language", 64),
+    ("referer", "referer", 256),
+    ("platform", "sec-ch-ua-platform", 32),
+    ("client_hint", "sec-ch-ua", 128),
+    ("mobile", "sec-ch-ua-mobile", 8),
+)
+
+
+def client_fingerprint(request: Any) -> str:
+    """A stable label for "probably the same caller", not a device identity.
+
+    Servers cannot identify a device. What is available is a handful of
+    self-reported headers plus the source address, and every part of that is
+    forgeable, shared behind NAT, and unstable across browser and network
+    changes. Hashing them yields something useful for *grouping* requests --
+    "these 200 probes look like one actor" -- and nothing stronger.
+
+    The hash is truncated and one-way so the trail carries a correlation handle
+    rather than a stored profile of the visitor. Treat a match as a hint and a
+    mismatch as meaningless.
     """
     try:
-        return request.client.host if request.client else "unknown"
+        headers = request.headers
+        parts = [
+            client_ip(request),
+            headers.get("user-agent", ""),
+            headers.get("accept-language", ""),
+            headers.get("accept-encoding", ""),
+            headers.get("sec-ch-ua-platform", ""),
+        ]
     except Exception:
-        return "unknown"
+        return ""
+    joined = "|".join(part or "-" for part in parts)
+    if joined.replace("|", "").replace("-", "") == "":
+        return ""
+    return f"c_{hashlib.sha256(joined.encode('utf-8', errors='ignore')).hexdigest()[:12]}"
+
+
+def device_hints(request: Any) -> dict:
+    """Client-declared context worth recording alongside a request."""
+    hints: dict[str, str] = {}
+    try:
+        headers = request.headers
+    except Exception:
+        return hints
+    for field, header, limit in _CLIENT_HINT_HEADERS:
+        value = _clip(headers.get(header, ""), limit)
+        if value:
+            hints[field] = value
+    return hints
 
 
 def key_fingerprint(supplied: str | None) -> str:
@@ -103,6 +190,26 @@ def _base_event(kind: str, request: Any, **fields: Any) -> dict:
             event["method"] = _clip(request.method, 8)
             event["path"] = _clip(request.url.path, 256)
             event["user_agent"] = _clip(request.headers.get("user-agent", ""), 256)
+        except Exception:
+            pass
+        # Label of the API key that authenticated the request, set by the
+        # security middleware. Without it the trail records that *someone* with
+        # a valid credential acted, which is not attribution when the credential
+        # is shared. Never the key itself -- only its name.
+        try:
+            caller = getattr(request.state, "api_caller", "")
+            if caller:
+                event["api_caller"] = _clip(caller, 64)
+        except Exception:
+            pass
+        # Correlation handle plus the client-declared hints behind it. Recorded
+        # so the console can group one actor's requests; see client_fingerprint
+        # for why this is not device identification.
+        try:
+            correlation = client_fingerprint(request)
+            if correlation:
+                event["client_id"] = correlation
+            event.update(device_hints(request))
         except Exception:
             pass
     for name, value in fields.items():

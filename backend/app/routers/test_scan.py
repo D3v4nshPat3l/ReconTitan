@@ -7,10 +7,11 @@ import time
 import uuid
 from collections.abc import Callable
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.config import settings
 from app.models.schemas import ScanType, VerifyRequest
+from app.services import audit
 from app.services.danger_mode import check_danger_gate
 from app.targeting import validate_scan_target
 
@@ -108,17 +109,30 @@ def _selected_tools(scan_type: ScanType) -> list[Tool]:
 
 @router.get("/test-scan")
 def test_scan(
+    http_request: Request,
     target: str = Query(..., min_length=3, max_length=253),
     scan_type: ScanType = Query(default=ScanType.FULL),
     danger_acknowledgement: str | None = Query(default=None, max_length=120),
 ):
     """Run a selected scan profile synchronously without MongoDB or Celery."""
+    # Only the queued path used to record scan events, but this is the endpoint
+    # the browser actually calls and the only one that works without Celery. The
+    # SOC console's scan-activity and target panels were therefore empty on every
+    # real deployment, while advertising attribution they never received.
     gate = check_danger_gate(scan_type.value, acknowledgement=danger_acknowledgement)
     if not gate.allowed:
+        audit.record_scan_event(
+            audit.SCAN_GATE_DENIED, http_request,
+            target=target, scan_type=scan_type.value, detail=gate.reason,
+        )
         raise HTTPException(status_code=403, detail=gate.reason)
 
     ok, target, error = validate_scan_target(target, resolve_dns=True)
     if not ok:
+        audit.record_scan_event(
+            audit.SCAN_REJECTED, http_request,
+            target=target, scan_type=scan_type.value, detail=error,
+        )
         raise HTTPException(status_code=400, detail=error)
 
     scan_id = f"test_{uuid.uuid4().hex[:8]}"
@@ -177,16 +191,12 @@ def test_scan(
         severity = str(finding.get("severity", "info")).lower()
         severity_counts[severity if severity in severity_counts else "info"] += 1
 
-    from app.tasks.ai_analysis import explain_finding, generate_scan_summary
+    from app.tasks.ai_analysis import ai_status, explain_findings_bulk, generate_scan_summary
 
     ai_summary = generate_scan_summary(target, all_findings, severity_counts)
-    actionable = sorted(
-        [finding for finding in all_findings if finding.get("severity") in {"critical", "high", "medium"}],
-        key=lambda finding: {"critical": 0, "high": 1, "medium": 2}.get(finding.get("severity"), 9),
-    )[:20]
-    for finding in actionable:
-        if not finding.get("explanation"):
-            finding["explanation"] = explain_finding(finding)
+    # Bounded in count, wall-clock, and concurrency inside the helper, so a slow
+    # local model cannot hold this synchronous request open indefinitely.
+    explain_findings_bulk(all_findings)
 
     payload = {
         "scan_id": scan_id,
@@ -197,11 +207,20 @@ def test_scan(
         "total_findings": len(all_findings),
         "severity_counts": severity_counts,
         "ai_summary": ai_summary,
+        "ai_backend": ai_status().get("active_backend", "fallback"),
         "tool_results": tool_results,
         "findings": all_findings,
     }
     if danger_session is not None:
         payload["danger_summary"] = danger_session.summary().model_dump(mode="json")
+
+    audit.record_scan_event(
+        audit.SCAN_ACCEPTED, http_request,
+        scan_id=scan_id, target=target, scan_type=scan_type.value,
+        status="completed",
+        findings=len(all_findings),
+        duration_seconds=payload["total_time_seconds"],
+    )
     return payload
 
 

@@ -44,7 +44,7 @@ def test_pdf_report_handles_structured_evidence_and_large_wrapped_values():
     content = build_pdf_report({
         "scan_id": "layout-test",
         "target": "example.com",
-        "version": "0.4.1",
+        "version": "0.5.0",
         "findings": findings,
     })
     assert content.startswith(b"%PDF-")

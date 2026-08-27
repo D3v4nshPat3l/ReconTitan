@@ -63,3 +63,14 @@ ReconTitan_*.html
 ReconTitan_*.pdf
 Mastery_*.html
 *.pdf
+
+# Stage artwork masters. The WebP conversions are what the page loads and are
+# committed; the source PNGs are 8.4 MB for the same six images and would
+# dominate the repository for no benefit. Keep them locally for re-encoding.
+frontend/assets/*.png
+
+# Generated credentials. They currently live outside the repository, but a
+# stray copy inside it must never become a commit.
+generated_secrets.txt
+admin_token.txt
+*_token.txt

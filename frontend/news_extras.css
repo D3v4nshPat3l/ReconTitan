@@ -1,38 +1,99 @@
-/* nc-footer: tags + read more link in one row */
-.nc-footer { display:flex; align-items:center; justify-content:space-between; gap:.5rem; margin-top:.6rem; flex-wrap:wrap; }
+/* Feed cards.
+   The grid uses a 1px gap over a border-coloured background, so the cards read
+   as one table divided by hairlines rather than as floating tiles. Fewer
+   edges, less visual noise, and the content does the work. */
+
+.news-card {
+  background: var(--bg);
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  transition: background .15s;
+}
+.news-card:hover { background: var(--surface); }
+
+.nc-hdr {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: .7rem;
+  color: var(--faint);
+  margin-bottom: .75rem;
+}
+.nc-source { font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.nc-time { font-family: var(--mono); white-space: nowrap; }
+
+.nc-title {
+  font-size: .95rem;
+  font-weight: 500;
+  line-height: 1.45;
+  margin-bottom: .5rem;
+}
+
+.nc-summary {
+  font-size: .84rem;
+  line-height: 1.65;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  flex-wrap: wrap;
+}
+.nc-tags { display: flex; gap: .3rem; flex-wrap: wrap; }
+.nc-tag {
+  font-size: .66rem;
+  letter-spacing: .04em;
+  color: var(--faint);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: .1rem .4rem;
+}
+
 .nc-read-more {
-  font-size:.68rem; color:var(--green); letter-spacing:.05em;
-  white-space:nowrap; transition:.15s; text-decoration:none;
-  border:1px solid rgba(139,195,74,.25); padding:.15rem .5rem; border-radius:3px;
-  flex-shrink:0;
+  font-size: .78rem;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.nc-read-more:hover { background:rgba(139,195,74,.1); text-decoration:none; }
+.nc-read-more:hover { text-decoration: underline; }
 
-/* Skeleton loader for news cards */
-.news-skeleton { pointer-events:none; }
+/* Severity is carried on a left edge rather than a coloured badge: present
+   when it matters, invisible when it does not. */
+.news-card[data-sev="critical"] { box-shadow: inset 2px 0 0 var(--critical); }
+.news-card[data-sev="high"]     { box-shadow: inset 2px 0 0 var(--high); }
+.news-card[data-sev="medium"]   { box-shadow: inset 2px 0 0 var(--medium); }
+
+/* Skeleton while the feed loads */
+.news-skeleton { pointer-events: none; }
 .sk-line {
-  height:10px; border-radius:3px;
-  background:linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
-  background-size:200% 100%;
-  animation:skeleton-sweep 1.4s infinite;
-  margin-bottom:.65rem;
+  height: 9px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s infinite;
+  margin-bottom: .7rem;
 }
-.sk-short { width:40%; }
-.sk-long  { width:95%; height:14px; }
-.sk-med   { width:70%; }
-@keyframes skeleton-sweep {
-  0%   { background-position:200% 0; }
-  100% { background-position:-200% 0; }
-}
+.sk-short { width: 35%; }
+.sk-med   { width: 65%; }
+.sk-long  { width: 90%; }
+@keyframes skeleton-sweep { to { background-position: -200% 0; } }
 
-/* AI summary box in scan progress */
-.ai-risk-badge {
-  display:inline-flex; align-items:center; gap:.4rem;
-  font-size:.7rem; font-weight:700; letter-spacing:.1em;
-  padding:.2rem .6rem; border-radius:3px; margin-top:.3rem;
+.news-empty, .news-error {
+  grid-column: 1 / -1;
+  background: var(--bg);
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--faint);
+  font-size: .88rem;
 }
-.ai-risk-badge.CRITICAL { background:rgba(239,83,80,.15); color:#ef5350; border:1px solid rgba(239,83,80,.3); }
-.ai-risk-badge.HIGH     { background:rgba(255,167,38,.15); color:#ffa726; border:1px solid rgba(255,167,38,.3); }
-.ai-risk-badge.MEDIUM   { background:rgba(205,220,57,.15); color:#cddc39; border:1px solid rgba(205,220,57,.3); }
-.ai-risk-badge.LOW      { background:rgba(139,195,74,.1);  color:#8bc34a; border:1px solid rgba(139,195,74,.2); }
-.ai-risk-badge.CLEAN    { background:rgba(77,208,225,.1);  color:#4dd0e1; border:1px solid rgba(77,208,225,.2); }

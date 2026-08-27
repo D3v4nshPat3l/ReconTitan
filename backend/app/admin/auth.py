@@ -75,6 +75,43 @@ def assert_safely_configured() -> None:
             "Generate one with: python3 -c 'import secrets; print(secrets.token_urlsafe(48))'"
         )
 
+    previous = settings.ADMIN_TOKEN_PREVIOUS
+    if previous:
+        if previous == settings.ADMIN_TOKEN:
+            raise RuntimeError(
+                "ADMIN_TOKEN_PREVIOUS is identical to ADMIN_TOKEN. That is not a "
+                "rotation; set the *old* token there, or clear it."
+            )
+        if len(previous) < settings.ADMIN_MIN_TOKEN_LENGTH:
+            raise RuntimeError(
+                "ADMIN_TOKEN_PREVIOUS is shorter than the minimum token length. A "
+                "rotation must not be a way to keep a weak token alive."
+            )
+
+    # The documented way in is an SSH tunnel, which arrives as 127.0.0.1. An
+    # allowlist that omits loopback therefore locks the operator out of the
+    # exact path the docs tell them to use. Warn rather than refuse: a
+    # deployment reached only through a known egress range is a legitimate
+    # setup, and failing to boot over a guess would be worse.
+    allowlist = settings.ADMIN_IP_ALLOWLIST
+    if allowlist and not settings.SERVERLESS:
+        import ipaddress
+
+        covers_loopback = False
+        for entry in allowlist:
+            try:
+                if ipaddress.ip_address("127.0.0.1") in ipaddress.ip_network(entry, strict=False):
+                    covers_loopback = True
+                    break
+            except ValueError:
+                continue
+        if not covers_loopback:
+            logger.warning(
+                "ADMIN_IP_ALLOWLIST does not include 127.0.0.1. An SSH tunnel "
+                "arrives as loopback, so the console will refuse you over the "
+                "documented access path. Add 127.0.0.1/32 unless that is intended."
+            )
+
 
 def _prune(now: float) -> None:
     """Drop expired records so the table cannot grow without bound."""
@@ -140,4 +177,22 @@ def token_matches(supplied: str | None) -> bool:
         return False
     if not supplied:
         return False
-    return secrets.compare_digest(supplied.strip(), settings.ADMIN_TOKEN)
+    supplied = supplied.strip()
+    if not supplied:
+        return False
+
+    # Every candidate is compared even after a match, so the work done does not
+    # depend on which token was supplied or whether a rotation is in progress.
+    # Each individual comparison is already constant time.
+    matched = False
+    if settings.ADMIN_TOKEN and secrets.compare_digest(supplied, settings.ADMIN_TOKEN):
+        matched = True
+    if settings.ADMIN_TOKEN_PREVIOUS and secrets.compare_digest(supplied, settings.ADMIN_TOKEN_PREVIOUS):
+        # Worth its own log line: the point of the overlap is to find out who is
+        # still on the old token, and silence would defeat that.
+        logger.warning(
+            "[admin] authenticated with ADMIN_TOKEN_PREVIOUS. Rotation is still "
+            "in progress; clear it once nothing legitimate is using it."
+        )
+        matched = True
+    return matched

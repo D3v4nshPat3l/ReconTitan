@@ -38,6 +38,24 @@ jobs:
           node --check frontend/dashboard.js
           node --check frontend/report.js
           bash -n deploy.sh
+      - name: Deployment preflight
+        # Gates on configuration that fails silently rather than loudly: a
+        # database that is not there, limits that stop being shared, an admin
+        # surface with no network control. Simulated as a serverless deploy
+        # because that is the shape with the most ways to be quietly wrong.
+        env:
+          PYTHONPATH: backend
+          RECONTITAN_SKIP_DOTENV: "1"
+          VERCEL: "1"
+          RECONTITAN_DEBUG: "false"
+          SECRET_KEY: ci-only-secret-value-that-is-over-thirty-two-chars
+          API_ACCESS_KEY: ci-api-access-key-value-over-thirty-two-characters
+          DOMAIN: scanner.example.com
+          CORS_ORIGINS: https://scanner.example.com
+          MONGO_URI: mongodb+srv://ci:ci@example.abcd.mongodb.net/recontitan
+          REDIS_URL: rediss://default:ci@example.upstash.io:6379
+        run: python -m app.preflight
+
       - name: Dependency audit
         run: pip-audit -r backend/requirements.txt
       - name: Static security scan

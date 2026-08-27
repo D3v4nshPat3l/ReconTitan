@@ -218,9 +218,15 @@ def run_ai_analysis(self, scan_id: str):
         record = db["scans"].find_one({"scan_id": scan_id}, {"_id": 0}) or {}
         findings = record.get("findings", [])
         counts = {level: sum(1 for f in findings if f.get("severity") == level) for level in ("critical", "high", "medium", "low", "info")}
-        from app.tasks.ai_analysis import generate_scan_summary
+        from app.tasks.ai_analysis import explain_findings_bulk, generate_scan_summary
         ai_summary = generate_scan_summary(record.get("target", "unknown"), findings, counts)
-        db["scans"].update_one({"scan_id": scan_id}, {"$set": {"ai_summary": ai_summary, "summary": ai_summary.get("executive_summary")}})
+        # Per-finding narration runs here rather than at read time so the
+        # report page never waits on a model. Bounded inside the helper.
+        explained = explain_findings_bulk(findings)
+        update = {"ai_summary": ai_summary, "summary": ai_summary.get("executive_summary")}
+        if explained:
+            update["findings"] = findings
+        db["scans"].update_one({"scan_id": scan_id}, {"$set": update})
     _update_scan_status(
         scan_id, "completed", phase="ai_analysis", progress=100,
         tools_completed=["ai_report"], tools_running=[], completed=True,

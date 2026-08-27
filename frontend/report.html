@@ -3,23 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="theme-color" content="#080d0a">
+<meta name="theme-color" content="#0b0c0e">
 <title>ReconTitan — Interactive Security Report</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=9">
-<link rel="stylesheet" href="news_extras.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="report.css?v=20">
+<link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
 <!-- TOP BAR -->
 <header class="topbar">
-  <a class="topbar-logo" href="/">◈ RECON<strong>TITAN</strong></a>
+  <a class="topbar-logo" href="/">Recon<strong>Titan</strong></a>
   <div class="topbar-target" id="topbarTarget">—</div>
   <div class="topbar-actions">
-    <button class="tb-btn primary" id="btnExportPdf">⬇ PROFESSIONAL PDF</button>
-    <button class="tb-btn" id="btnExportJson">⬇ JSON</button>
-    <button class="tb-btn" id="btnExportHtml">⬇ HTML</button>
-    <a class="tb-btn" href="/">← NEW SCAN</a>
+    <button class="tb-btn primary" id="btnExportPdf">Download PDF</button>
+    <button class="tb-btn" id="btnExportJson">JSON</button>
+    <button class="tb-btn" id="btnExportHtml">HTML</button>
+    <a class="tb-btn" href="/">New scan</a>
   </div>
 </header>
 
@@ -116,15 +118,18 @@
         Category: <strong id="modalCat"></strong>
         <span id="modalCvssWrap"> &nbsp;·&nbsp; CVSS: <strong id="modalCvss"></strong></span>
       </div>
-      <!-- AI Verify -->
+      <!-- AI actions -->
       <div class="modal-ai-row">
         <button class="modal-ai-btn" id="modalAiBtn">🤖 VERIFY WITH AI</button>
+        <button class="modal-ai-btn" id="modalTopicBtn">🧠 EXPLAIN THIS TOPIC</button>
+        <span class="modal-ai-badge" id="modalAiBadge" title="Which model answers these buttons"></span>
       </div>
       <div id="modalAiResult" style="display:none"></div>
+      <div id="modalTopicResult" style="display:none"></div>
     </div>
   </div>
 </div>
 
-<script src="report.js?v=9"></script>
+<script src="report.js?v=20"></script>
 </body>
 </html>

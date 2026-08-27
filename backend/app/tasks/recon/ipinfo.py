@@ -3,6 +3,8 @@ import requests
 import socket
 import logging
 
+from app.config import settings
+
 logger = logging.getLogger("recontitan.recon.ipinfo")
 
 TIMEOUT = 10
@@ -68,7 +70,13 @@ def run_ipinfo(target: str) -> list[dict]:
         "evidence":    evidence,
     })
 
-    # Also do reverse IP lookup via hackertarget (shared hosting check)
+    # Reverse-IP lookup (shared-hosting check) via api.hackertarget.com. This
+    # sends the resolved address to a third party, so it is opt-in: the scan
+    # authorization an operator holds rarely covers onward disclosure.
+    if not settings.ALLOW_HACKERTARGET:
+        logger.info("[reverse_ip] skipped (ALLOW_HACKERTARGET=false)")
+        return findings
+
     try:
         rev_resp = requests.get(
             "https://api.hackertarget.com/reverseiplookup/",

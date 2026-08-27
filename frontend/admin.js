@@ -23,16 +23,54 @@ function esc(value) {
   ));
 }
 
+/* Every timestamp is stored UTC and rendered in IST.
+   `toLocaleString()` follows whatever locale the viewing machine happens to
+   have, so the same event read from two laptops showed two different times and
+   neither said which zone it meant. The zone is pinned and labelled instead. */
+const IST = 'Asia/Kolkata';
+
+/** Parse a server timestamp as UTC.
+
+    The API is the authority and now marks its datetimes UTC-aware, but any
+    record written before that fix serializes as "2026-08-26T12:25:23" with no
+    offset — and `new Date()` reads an offset-less string as *local* time,
+    silently shifting it by the viewer's UTC offset. Treating an unmarked
+    timestamp as UTC matches how it was actually stored. */
+function parseUtc(value) {
+  if (!value) return null;
+  const text = String(value);
+  const marked = /(Z|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}Z`;
+  const date = new Date(marked);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function fmtTime(value) {
   if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+  const date = parseUtc(value);
+  if (!date) return '—';
+  return date.toLocaleString('en-IN', {
+    timeZone: IST,
+    day: '2-digit', month: 'short',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+}
+
+/** Hour-of-day in IST, for chart axes. */
+function fmtHour(value) {
+  if (!value) return '';
+  const date = parseUtc(value.length <= 13 ? `${value}:00:00` : value);
+  if (!date) return '';
+  return date.toLocaleTimeString('en-IN', {
+    timeZone: IST, hour: '2-digit', minute: '2-digit', hour12: false,
+  });
 }
 
 function fmtAgo(value) {
   if (!value) return '—';
-  const seconds = Math.floor((Date.now() - new Date(value).getTime()) / 1000);
-  if (Number.isNaN(seconds)) return '—';
+  const date = parseUtc(value);
+  if (!date) return '—';
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -123,24 +161,66 @@ function renderOverview(data) {
 
 function renderTimeline(data) {
   const buckets = data.buckets || [];
+  const host = $('timeline');
   if (!buckets.length) {
-    $('timeline').innerHTML = '<div class="empty">No traffic recorded in this window.</div>';
+    host.innerHTML = '<div class="empty">No traffic recorded in this window.</div>';
     return;
   }
+
   const peak = Math.max(...buckets.map((b) => b.hostile + b.normal), 1);
-  $('timeline').innerHTML = buckets.map((b) => {
-    const hostileH = Math.round((b.hostile / peak) * 165);
-    const normalH = Math.round((b.normal / peak) * 165);
-    const hour = b.hour.slice(11) || b.hour;
-    return `<div class="tl-col" data-label="${esc(hour)} · ${b.hostile} hostile / ${b.normal} normal">
-      ${b.hostile ? `<div class="tl-bar hostile" style="height:${hostileH}px"></div>` : ''}
-      ${b.normal ? `<div class="tl-bar normal" style="height:${normalH}px"></div>` : ''}
+  const H = 150;
+
+  // Label every Nth bucket so the axis stays readable at any window length.
+  const step = Math.max(1, Math.ceil(buckets.length / 8));
+
+  const cols = buckets.map((b, i) => {
+    const total = b.hostile + b.normal;
+    // A non-zero count must never round to an invisible bar; that is the
+    // difference between "nothing happened" and "something small happened".
+    const px = (n) => (n > 0 ? Math.max(2, Math.round((n / peak) * H)) : 0);
+    const label = fmtHour(b.hour);
+    return `<div class="tl-col" title="${esc(label)} — ${b.hostile} hostile, ${b.normal} normal">
+        <div class="tl-stack" data-h="${H}">
+          ${b.hostile ? `<div class="tl-bar hostile" data-h="${px(b.hostile)}"></div>` : ''}
+          ${b.normal ? `<div class="tl-bar normal" data-h="${px(b.normal)}"></div>` : ''}
+          ${total === 0 ? '<div class="tl-bar empty-bar"></div>' : ''}
+        </div>
+        <span class="tl-tick">${i % step === 0 ? esc(label) : ''}</span>
+      </div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="chart">
+      <div class="chart-yaxis"><span>${peak}</span><span>${Math.round(peak / 2)}</span><span>0</span></div>
+      <div class="chart-plot">${cols}</div>
+    </div>
+    <div class="legend">
+      <span><i class="sw-hostile"></i>Hostile</span>
+      <span><i class="sw-normal"></i>Normal</span>
+      <span class="legend-zone">Times in IST</span>
     </div>`;
-  }).join('') +
-  `<div class="legend" style="width:100%">
-     <span><i style="background:#f87171"></i>hostile</span>
-     <span><i style="background:#a3e635"></i>normal</span>
-   </div>`;
+
+  applySizes(host);
+}
+
+/* The console runs under `style-src 'self'` with no 'unsafe-inline', so a
+   `style="height:..."` attribute inside an innerHTML string is refused by the
+   browser and the bar renders with no height at all — the chart looked empty
+   and nothing in the network or the data explained why.
+
+   CSP governs style *attributes parsed from markup*; assigning through the
+   CSSOM is not restricted. So sizes travel as data-* and are applied here
+   after insertion, which keeps the strict policy intact. */
+function applySizes(root) {
+  root.querySelectorAll('[data-h]').forEach((el) => {
+    el.style.height = `${el.dataset.h}px`;
+  });
+  root.querySelectorAll('[data-w]').forEach((el) => {
+    el.style.width = `${el.dataset.w}%`;
+  });
+  root.querySelectorAll('[data-bg]').forEach((el) => {
+    el.style.background = el.dataset.bg;
+  });
 }
 
 function renderClasses(data) {
@@ -150,7 +230,14 @@ function renderClasses(data) {
     return;
   }
   const peak = Math.max(...classes.map((c) => c.events), 1);
-  const colour = { critical: '#f87171', high: '#fb923c', medium: '#facc15', low: '#60a5fa', info: '#65a30d' };
+  /* Reads the design tokens rather than repeating hex values, so the palette
+     cannot drift out of step with the stylesheet — the old map still held a
+     lime green from a previous theme and was painting it on every info bar. */
+  const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const colour = {
+    critical: token('--critical'), high: token('--high'), medium: token('--medium'),
+    low: token('--low'), info: token('--dim'),
+  };
   $('classes').innerHTML = classes.map((c) => `
     <div>
       <div class="cls-top">
@@ -158,9 +245,10 @@ function renderClasses(data) {
         <span class="cls-count">${esc(c.events)} · ${esc(c.sources)} src</span>
       </div>
       <div class="cls-track">
-        <div class="cls-fill" style="width:${(c.events / peak) * 100}%;background:${colour[c.severity] || '#65a30d'}"></div>
+        <div class="cls-fill" data-w="${(c.events / peak) * 100}" data-bg="${colour[c.severity] || token('--dim')}"></div>
       </div>
     </div>`).join('');
+  applySizes($('classes'));
 }
 
 function threatRows(sources) {
@@ -244,6 +332,162 @@ function renderTargets(data) {
     </tr>`).join('')}</tbody></table>`;
 }
 
+function renderDevices(data) {
+  $('deviceCaveat').textContent = data.caveat || '';
+  const rows = data.devices || [];
+  if (!rows.length) {
+    $('deviceTable').innerHTML = '<div class="empty">No client activity in this window.</div>';
+    return;
+  }
+  $('deviceTable').innerHTML = `<table><thead><tr>
+      <th>CLIENT</th><th>REQUESTS</th><th>ADDRESSES</th><th>USER AGENT</th>
+      <th>PLATFORM</th><th>LANG</th><th>API KEY</th><th>PATHS</th><th>LAST SEEN</th>
+    </tr></thead><tbody>${rows.map((d) => `
+    <tr class="${d.hostile ? 'row-hostile' : ''}">
+      <td class="mono-dim">${esc(d.client_id)}${d.hostile
+        ? ` <span class="pill">${esc(d.hostile_kinds.join(', '))}</span>` : ''}</td>
+      <td class="${d.requests > 100 ? 'count-hot' : ''}">${esc(d.requests)}</td>
+      <td>${d.ips.map((ip) => `<span class="pill mono-dim">${esc(ip)}</span>`).join(' ') || '—'}</td>
+      <td class="ua-cell" title="${esc(d.user_agent)}">${esc(d.user_agent) || '—'}${
+        d.user_agent_count > 1 ? ` <span class="pill">+${d.user_agent_count - 1}</span>` : ''}</td>
+      <td class="mono-dim">${esc(d.platform) || '—'}</td>
+      <td class="mono-dim">${esc(d.language) || '—'}</td>
+      <td>${d.api_callers.map((c) => `<span class="pill">${esc(c)}</span>`).join(' ') || '—'}</td>
+      <td class="mono-dim">${esc(d.paths_touched)}</td>
+      <td class="nowrap mono-dim">${esc(fmtAgo(d.last_seen))}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+/* `api()` only does GET. Blocking is a state change, so it gets its own path
+   with the same auth handling and a surfaced error — a silent failure here
+   would leave an operator believing a source was blocked when it was not. */
+async function apiSend(path, method, body) {
+  const response = await fetch(`${BASE}/api/${path}`, {
+    method,
+    headers: { 'X-ReconTitan-Admin': token(), 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (response.status === 401) { lock('Session expired.'); throw new Error('unauthorized'); }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.detail || `Failed (${response.status})`);
+  return data;
+}
+
+function flash(message, bad = false) {
+  const el = $('flash');
+  el.textContent = message;
+  el.className = `flash${bad ? ' is-bad' : ''}`;
+  el.hidden = false;
+  clearTimeout(flash._t);
+  flash._t = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+/* ── Detections ─────────────────────────────────────────────────────────── */
+
+const SEV_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+function renderDetections(data) {
+  $('detectNote').textContent = data.note || '';
+  const rows = data.detections || [];
+  if (!rows.length) {
+    $('detectList').innerHTML =
+      `<div class="empty">Nothing matched in this window. ${esc(String(data.events_examined || 0))} events across `
+      + `${esc(String(data.sources_examined || 0))} sources examined.</div>`;
+    return;
+  }
+
+  $('detectList').innerHTML = rows.map((d, i) => `
+    <article class="detect sev-${esc(d.severity)}" data-i="${i}">
+      <button class="detect-head" type="button" aria-expanded="false">
+        <span class="sev-chip ${esc(d.severity)}">${esc(d.severity)}</span>
+        <span class="detect-title">${esc(d.title)}</span>
+        <span class="detect-count mono-dim">${esc(d.count)} events</span>
+        <span class="detect-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="detect-body" hidden>
+        <p class="detect-why">${esc(d.explanation)}</p>
+        ${d.caveat ? `<p class="detect-caveat">${esc(d.caveat)}</p>` : ''}
+        <dl class="detect-facts">
+          <div><dt>Source</dt><dd class="mono-dim">${esc(d.source)}</dd></div>
+          <div><dt>First seen</dt><dd class="mono-dim">${esc(fmtTime(d.first_seen))}</dd></div>
+          <div><dt>Last seen</dt><dd class="mono-dim">${esc(fmtTime(d.last_seen))}</dd></div>
+          <div><dt>Rule</dt><dd class="mono-dim">${esc(d.rule)}</dd></div>
+        </dl>
+        ${d.user_agents?.length ? `<div class="detect-sub"><span>User agents</span>${
+          d.user_agents.map((a) => `<span class="pill">${esc(a)}</span>`).join('')}</div>` : ''}
+        ${d.sample_paths?.length ? `<div class="detect-sub"><span>Evidence</span>${
+          d.sample_paths.map((x) => `<span class="pill">${esc(x)}</span>`).join('')}</div>` : ''}
+        <div class="detect-actions">
+          <button class="block-btn danger" data-block-source="${esc(d.source)}"
+                  data-reason="${esc(d.rule)}">Block this source</button>
+          <button class="block-btn ghost" data-inspect="${esc(d.source)}">Full profile</button>
+        </div>
+      </div>
+    </article>`).join('');
+}
+
+/* ── Source profile ─────────────────────────────────────────────────────── */
+
+async function inspectSource(ip) {
+  const d = await api(`source/${encodeURIComponent(ip)}`, { hours: 168 });
+  if (!d.available) return;
+  const list = (rows, key = 'value') => (rows || []).map((r) =>
+    `<div class="prof-row"><span class="mono-dim trunc">${esc(r[key])}</span><b>${esc(r.count)}</b></div>`).join('')
+    || '<div class="prof-none">none</div>';
+
+  $('modalBody').innerHTML = `
+    <div class="prof-grid">
+      <div><span class="prof-k">Source</span><span class="prof-v mono-dim">${esc(d.source)}</span></div>
+      <div><span class="prof-k">Events</span><span class="prof-v">${esc(d.events)}</span></div>
+      <div><span class="prof-k">Hostile</span><span class="prof-v ${d.hostile_events ? 'sev-critical' : ''}">${esc(d.hostile_events)}</span></div>
+      <div><span class="prof-k">First seen</span><span class="prof-v mono-dim">${esc(fmtTime(d.first_seen))}</span></div>
+      <div><span class="prof-k">Last seen</span><span class="prof-v mono-dim">${esc(fmtTime(d.last_seen))}</span></div>
+      <div><span class="prof-k">Blocked</span><span class="prof-v">${d.blocked ? 'yes' : 'no'}</span></div>
+    </div>
+    <p class="detect-caveat">${esc(d.caveat || '')}</p>
+    <div class="prof-cols">
+      <section><h4>Event kinds</h4>${list(d.kinds)}</section>
+      <section><h4>Paths</h4>${list(d.paths)}</section>
+      <section><h4>User agents</h4>${list(d.user_agents)}</section>
+      <section><h4>Targets scanned</h4>${list(d.targets_scanned)}</section>
+    </div>
+    ${Object.keys(d.client_hints || {}).length ? `<div class="detect-sub"><span>Client hints</span>${
+      Object.entries(d.client_hints).map(([k, v]) => `<span class="pill">${esc(k)}: ${esc(v)}</span>`).join('')}</div>` : ''}
+    ${d.api_callers?.length ? `<div class="detect-sub"><span>API keys used</span>${
+      d.api_callers.map((c) => `<span class="pill">${esc(c)}</span>`).join('')}</div>` : ''}
+    <h4 class="prof-h">Recent activity</h4>
+    <div class="table-wrap"><table><thead><tr><th>Time (IST)</th><th>Kind</th><th>Method</th><th>Path</th><th>Detail</th></tr></thead>
+      <tbody>${(d.timeline || []).map((t) => `<tr>
+        <td class="nowrap mono-dim">${esc(fmtTime(t.at))}</td>
+        <td><span class="pill">${esc(t.kind)}</span></td>
+        <td class="mono-dim">${esc(t.method || '')}</td>
+        <td class="mono-dim trunc">${esc(t.path || t.target || '')}</td>
+        <td class="trunc">${esc(t.detail || '')}</td></tr>`).join('')}</tbody></table></div>`;
+  $('modalTitle').textContent = `Source ${ip}`;
+  $('sourceModal').hidden = false;
+}
+
+/* ── Blocklist ──────────────────────────────────────────────────────────── */
+
+function renderBlocklist(data) {
+  const targets = data.targets || [];
+  const sources = data.sources || [];
+
+  $('targetBlockTable').innerHTML = targets.length ? `<table><thead><tr>
+      <th>HOST</th><th>REASON</th><th>ADDED (IST)</th><th></th></tr></thead><tbody>${targets.map((t) => `
+      <tr><td class="mono-dim">${esc(t.host)}</td><td>${esc(t.reason) || '—'}</td>
+        <td class="nowrap mono-dim">${esc(fmtTime(t.added_at))}</td>
+        <td><button class="block-btn ghost" data-unblock-target="${esc(t.host)}">Remove</button></td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">No targets blocked.</div>';
+
+  $('sourceBlockTable').innerHTML = sources.length ? `<table><thead><tr>
+      <th>SOURCE</th><th>REASON</th><th>ADDED (IST)</th><th></th></tr></thead><tbody>${sources.map((t) => `
+      <tr><td class="mono-dim">${esc(t.source)}</td><td>${esc(t.reason) || '—'}</td>
+        <td class="nowrap mono-dim">${esc(fmtTime(t.added_at))}</td>
+        <td><button class="block-btn ghost" data-unblock-source="${esc(t.source)}">Remove</button></td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">No sources blocked.</div>';
+}
+
 /* ── Loading ────────────────────────────────────────────────────────────── */
 
 async function refresh() {
@@ -264,6 +508,12 @@ async function refresh() {
       renderEvents(await api('events', { kind: state.kind, ip: state.ip, limit: 200 }));
     } else if (state.view === 'scans') {
       renderScans(await api('scans', { limit: 200 }));
+    } else if (state.view === 'detections') {
+      renderDetections(await api('detections'));
+    } else if (state.view === 'blocklist') {
+      renderBlocklist(await api('blocklist'));
+    } else if (state.view === 'devices') {
+      renderDevices(await api('devices', { limit: 200 }));
     } else if (state.view === 'targets') {
       renderTargets(await api('targets', { limit: 100 }));
     }
@@ -312,3 +562,75 @@ if (token()) {
     start();
   }).catch(() => lock(''));
 }
+
+/* ── Actions ────────────────────────────────────────────────────────────── */
+/* Delegated: every panel is re-rendered on refresh, so listeners bound to
+   individual buttons would be discarded on the next tick. */
+
+document.addEventListener('click', async (event) => {
+  const el = event.target.closest('[data-block-source],[data-unblock-source],[data-unblock-target],[data-inspect],.detect-head');
+  if (!el) return;
+
+  if (el.classList.contains('detect-head')) {
+    const body = el.nextElementSibling;
+    const open = !body.hidden;
+    body.hidden = open;
+    el.setAttribute('aria-expanded', String(!open));
+    return;
+  }
+
+  try {
+    if (el.dataset.inspect) {
+      await inspectSource(el.dataset.inspect);
+    } else if (el.dataset.blockSource) {
+      const source = el.dataset.blockSource;
+      if (!confirm(`Block ${source}? It will be refused before routing.`)) return;
+      await apiSend('blocklist/sources', 'POST', { source, reason: el.dataset.reason || 'blocked from console' });
+      flash(`${source} blocked.`);
+      refresh();
+    } else if (el.dataset.unblockSource) {
+      await apiSend(`blocklist/sources/${encodeURIComponent(el.dataset.unblockSource)}`, 'DELETE');
+      flash(`${el.dataset.unblockSource} unblocked.`);
+      refresh();
+    } else if (el.dataset.unblockTarget) {
+      await apiSend(`blocklist/targets/${encodeURIComponent(el.dataset.unblockTarget)}`, 'DELETE');
+      flash(`${el.dataset.unblockTarget} unblocked.`);
+      refresh();
+    }
+  } catch (error) {
+    if (error.message !== 'unauthorized') flash(error.message, true);
+  }
+});
+
+document.addEventListener('submit', async (event) => {
+  const form = event.target;
+  if (form.id !== 'targetForm' && form.id !== 'sourceForm') return;
+  event.preventDefault();
+  try {
+    if (form.id === 'targetForm') {
+      await apiSend('blocklist/targets', 'POST', {
+        host: $('targetHost').value.trim(), reason: $('targetReason').value.trim(),
+      });
+      flash(`${$('targetHost').value.trim()} will no longer be scanned.`);
+      $('targetHost').value = ''; $('targetReason').value = '';
+    } else {
+      await apiSend('blocklist/sources', 'POST', {
+        source: $('sourceValue').value.trim(), reason: $('sourceReason').value.trim(),
+      });
+      flash(`${$('sourceValue').value.trim()} blocked.`);
+      $('sourceValue').value = ''; $('sourceReason').value = '';
+    }
+    refresh();
+  } catch (error) {
+    if (error.message !== 'unauthorized') flash(error.message, true);
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if (event.target.id === 'modalClose' || event.target.id === 'sourceModal') {
+    $('sourceModal').hidden = true;
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') $('sourceModal').hidden = true;
+});

@@ -1,5 +1,43 @@
 # ReconTitan v0.3.0 Security and Functionality Audit
 
+> ### ⚠️ Currency of this document
+>
+> **This audit covers v0.3.0 (with a v0.4.0 follow-up appended at the end). The current
+> release is v0.5.0.** It is retained as a historical record of that review, not as a
+> statement about the code shipping today.
+>
+> Substantial functionality has landed since and **has not been independently audited**:
+>
+> | Added after this audit | Release |
+> |---|---|
+> | Danger Mode — active injection, traversal, IDOR, and AXFR probing | 0.5.0 |
+> | Admin SOC console and append-only audit trail | 0.5.0 |
+> | Serverless deployment path and Redis-backed shared rate-limit state | 0.5.0 |
+> | CPE-based CVE version matching | 0.5.0 |
+> | Local AI narration (Ollama) and the `/api/ai/*` endpoints | 0.5.0 |
+>
+> Danger Mode in particular is the most intrusive capability in the product and postdates
+> every finding below. See [SECURITY.md](SECURITY.md) and [docs/DANGER_MODE.md](docs/DANGER_MODE.md)
+> for its authorization requirements and safety bounds.
+>
+> **Defects found after this audit was written** — recorded here because several fall
+> squarely within its stated scope and show what a point-in-time review does not catch:
+>
+> - `api.hackertarget.com` received the target address on every recon scan with no key,
+>   no flag, and no documentation. This is the same class of issue as the automatic
+>   `web-check.xyz` submission that *this audit* removed (see "Unexpected public
+>   aggregator disclosure" below) — it was simply missed. Fixed in 0.5.0 behind
+>   `ALLOW_HACKERTARGET`, default off.
+> - `.env.example` shipped `ALLOW_DANGER_MODE=true`, contradicting the fail-closed posture
+>   this audit verified. Fixed in 0.5.0.
+> - `sitemap.xml` parsing required an undeclared `lxml` dependency and threw on every scan,
+>   swallowed by a broad `except`. Fixed in 0.5.0.
+> - `waf_detect` was reported as unavailable on hosts lacking a binary it never used.
+>   Fixed in 0.5.0.
+>
+> A fresh end-to-end audit should be commissioned before any public production exposure.
+
+
 **Audit date:** July 24, 2026
 **Scope:** uploaded `ReconTitan-master.zip`, compared with the public `master` repository snapshot
 **Method:** manual code review, threat modeling, targeted code changes, automated tests, static searches, and configuration syntax validation

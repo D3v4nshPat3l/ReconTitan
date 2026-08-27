@@ -115,7 +115,7 @@ def test_scan_endpoint_rejects_danger_when_disabled(monkeypatch):
 
 def test_capabilities_publishes_danger_profile_and_gate_state(monkeypatch):
     monkeypatch.setattr(settings, "ALLOW_DANGER_MODE", False)
-    payload = capabilities_payload("0.4.1")
+    payload = capabilities_payload("0.5.0")
     danger = next(profile for profile in payload["profiles"] if profile["key"] == "danger")
     assert danger["enabled"] is False
     assert danger["requires_opt_in"] is True

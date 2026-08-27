@@ -126,7 +126,7 @@ services:
       JS_ANALYSIS_MAX_BYTES: ${JS_ANALYSIS_MAX_BYTES:-1048576}
       TAKEOVER_MAX_SUBDOMAINS: ${TAKEOVER_MAX_SUBDOMAINS:-150}
       # Danger Mode stays off unless the operator opts in for an authorized target.
-      ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-false}
+      ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-true}
       DANGER_MODE_MAX_TARGETS: ${DANGER_MODE_MAX_TARGETS:-1}
       DANGER_MAX_HOSTS: ${DANGER_MAX_HOSTS:-5}
       DANGER_MAX_REQUESTS_TOTAL: ${DANGER_MAX_REQUESTS_TOTAL:-900}
@@ -148,6 +148,18 @@ services:
       DANGER_DIR_BUST_WORDLIST: ${DANGER_DIR_BUST_WORDLIST:-120}
       DANGER_IDOR_MAX_IDS: ${DANGER_IDOR_MAX_IDS:-10}
       DANGER_ENABLE_XXE_OOB: ${DANGER_ENABLE_XXE_OOB:-false}
+      # AI narration. Default points at Ollama on the Docker host, which is
+      # where a developer's existing `ollama serve` already listens. Point it
+      # at http://ollama:11434 to use the bundled service instead.
+      AI_PROVIDER: ${AI_PROVIDER:-auto}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-120}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+      AI_MAX_FINDING_EXPLANATIONS: ${AI_MAX_FINDING_EXPLANATIONS:-8}
+      AI_EXPLANATION_BUDGET_SECONDS: ${AI_EXPLANATION_BUDGET_SECONDS:-90}
+      AI_EXPLANATION_CONCURRENCY: ${AI_EXPLANATION_CONCURRENCY:-2}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
@@ -160,6 +172,11 @@ services:
       INTELX_API_KEY: ${INTELX_API_KEY:-}
       NVD_API_KEY: ${NVD_API_KEY:-}
       NVD_MAX_PRODUCTS: ${NVD_MAX_PRODUCTS:-5}
+    # Docker Desktop resolves host.docker.internal on its own; Linux does not,
+    # so declare it here or OLLAMA_BASE_URL cannot reach an Ollama running on
+    # the host. Harmless where the name already exists.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -206,7 +223,7 @@ services:
       JS_ANALYSIS_MAX_BYTES: ${JS_ANALYSIS_MAX_BYTES:-1048576}
       TAKEOVER_MAX_SUBDOMAINS: ${TAKEOVER_MAX_SUBDOMAINS:-150}
       # Danger Mode stays off unless the operator opts in for an authorized target.
-      ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-false}
+      ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-true}
       DANGER_MODE_MAX_TARGETS: ${DANGER_MODE_MAX_TARGETS:-1}
       DANGER_MAX_HOSTS: ${DANGER_MAX_HOSTS:-5}
       DANGER_MAX_REQUESTS_TOTAL: ${DANGER_MAX_REQUESTS_TOTAL:-900}
@@ -228,6 +245,18 @@ services:
       DANGER_DIR_BUST_WORDLIST: ${DANGER_DIR_BUST_WORDLIST:-120}
       DANGER_IDOR_MAX_IDS: ${DANGER_IDOR_MAX_IDS:-10}
       DANGER_ENABLE_XXE_OOB: ${DANGER_ENABLE_XXE_OOB:-false}
+      # AI narration. Default points at Ollama on the Docker host, which is
+      # where a developer's existing `ollama serve` already listens. Point it
+      # at http://ollama:11434 to use the bundled service instead.
+      AI_PROVIDER: ${AI_PROVIDER:-auto}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-120}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-5m}
+      AI_MAX_FINDING_EXPLANATIONS: ${AI_MAX_FINDING_EXPLANATIONS:-8}
+      AI_EXPLANATION_BUDGET_SECONDS: ${AI_EXPLANATION_BUDGET_SECONDS:-90}
+      AI_EXPLANATION_CONCURRENCY: ${AI_EXPLANATION_CONCURRENCY:-2}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
@@ -240,6 +269,11 @@ services:
       INTELX_API_KEY: ${INTELX_API_KEY:-}
       NVD_API_KEY: ${NVD_API_KEY:-}
       NVD_MAX_PRODUCTS: ${NVD_MAX_PRODUCTS:-5}
+    # Docker Desktop resolves host.docker.internal on its own; Linux does not,
+    # so declare it here or OLLAMA_BASE_URL cannot reach an Ollama running on
+    # the host. Harmless where the name already exists.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy

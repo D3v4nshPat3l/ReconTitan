@@ -134,11 +134,32 @@ def test_deploy_script_writes_the_danger_gate_into_env():
     assert "ALLOW_DANGER_MODE=" in deploy
 
 
-def test_deploy_script_defaults_danger_mode_off():
-    """Present and documented, but never enabled without a deliberate choice."""
+def test_deploy_script_enables_danger_mode_deliberately():
+    """Danger Mode ships enabled, by an explicit decision of this project's owner.
+
+    It was previously forced off in every generated .env. That is the safer
+    default and the reason the original test existed, but it meant the operator
+    had to re-enable it after every deploy, and the UI reported the scan as
+    rejected with no obvious cause. The choice was made knowingly: the flag is
+    on in .env, .env.example, deploy.sh, and the Compose fallback.
+
+    The two-step runtime gate is what actually protects a target, and it is
+    untouched — a scan still requires the checkbox plus the typed
+    acknowledgement, checked again inside the worker. This test exists so the
+    value cannot drift back silently in either direction.
+    """
     deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
-    assert "ALLOW_DANGER_MODE=false" in deploy
-    assert "ALLOW_DANGER_MODE=true" not in deploy
+    assert "ALLOW_DANGER_MODE=true" in deploy
+    assert "ALLOW_DANGER_MODE=false" not in deploy
+
+
+def test_the_typed_acknowledgement_gate_is_still_enforced():
+    """Enabling the flag must not have weakened the gate behind it."""
+    from app.services.danger_mode import check_danger_gate
+
+    assert not check_danger_gate("danger", acknowledgement=None).allowed
+    assert not check_danger_gate("danger", acknowledgement="").allowed
+    assert not check_danger_gate("danger", acknowledgement="i am authorised").allowed
 
 
 def test_deploy_script_preserves_an_existing_env():

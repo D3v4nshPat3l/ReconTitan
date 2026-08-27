@@ -17,10 +17,12 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from app.admin.deps import require_admin
 from app.database import get_db
+from app.services import blocklist, detections
 from app.services import audit
 
 logger = logging.getLogger("recontitan.admin.api")
@@ -48,6 +50,7 @@ SEVERITY_BY_KIND = {
     audit.SCAN_GATE_DENIED: "medium",
     audit.SCAN_REJECTED: "low",
     audit.SCAN_ACCEPTED: "info",
+    audit.ACCESS: "info",
 }
 
 
@@ -225,6 +228,81 @@ def events(
     return {"available": True, "window_hours": hours, "events": rows}
 
 
+@router.get("/devices")
+def devices(
+    hours: int = Query(default=24, ge=1, le=720),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """Clients seen in the window, grouped by correlation handle.
+
+    Grouped by ``client_id`` (a hash of address plus self-reported headers)
+    rather than by IP alone, so several browsers behind one NAT address are not
+    collapsed into a single row. Every input to that hash is client-controlled,
+    so a row means "requests that look alike", never "this device". The response
+    says so in ``caveat`` and the console repeats it, because a monitoring view
+    that implies certainty it does not have is worse than no view.
+    """
+    db = get_db()
+    if db is None:
+        return {"available": False, "reason": "MongoDB unavailable", "devices": []}
+
+    since = _since(hours)
+    pipeline = [
+        {"$match": {"at": {"$gte": since}}},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$client_id", "$ip"]},
+                # Coalesced documents carry a count; single events do not.
+                "requests": {"$sum": {"$ifNull": ["$count", 1]}},
+                "first_seen": {"$min": "$at"},
+                "last_seen": {"$max": "$at"},
+                "ips": {"$addToSet": "$ip"},
+                "user_agents": {"$addToSet": "$user_agent"},
+                "platforms": {"$addToSet": "$platform"},
+                "languages": {"$addToSet": "$accept_language"},
+                "callers": {"$addToSet": "$api_caller"},
+                "paths": {"$addToSet": "$path"},
+                "kinds": {"$addToSet": "$kind"},
+            }
+        },
+        {"$sort": {"requests": -1}},
+        {"$limit": limit},
+    ]
+
+    rows = []
+    for row in _events(db).aggregate(pipeline):
+        kinds = [kind for kind in row.get("kinds", []) if kind]
+        hostile = sorted(kind for kind in kinds if kind in THREAT_KINDS)
+        agents = [value for value in row.get("user_agents", []) if value]
+        rows.append({
+            "client_id": row["_id"],
+            "requests": row.get("requests", 0),
+            "first_seen": row.get("first_seen"),
+            "last_seen": row.get("last_seen"),
+            "ips": sorted(value for value in row.get("ips", []) if value),
+            "user_agent": agents[0] if agents else "",
+            "user_agent_count": len(agents),
+            "platform": next((v for v in row.get("platforms", []) if v), ""),
+            "language": next((v for v in row.get("languages", []) if v), ""),
+            "api_callers": sorted(value for value in row.get("callers", []) if value),
+            "paths_touched": len([value for value in row.get("paths", []) if value]),
+            "hostile_kinds": hostile,
+            "hostile": bool(hostile),
+        })
+
+    return {
+        "available": True,
+        "window_hours": hours,
+        "devices": rows,
+        "caveat": (
+            "Rows group requests that share an address and self-reported headers. "
+            "Every one of those is client-controlled, shared behind NAT, and changes "
+            "with browser or network. This identifies traffic patterns, not devices "
+            "or people."
+        ),
+    }
+
+
 @router.get("/scans")
 def scans(
     hours: int = Query(default=168, ge=1, le=8760),
@@ -289,3 +367,103 @@ def targets(hours: int = Query(default=168, ge=1, le=8760), limit: int = Query(d
             for row in db["scans"].aggregate(pipeline)
         ],
     }
+
+
+# ── Detections ──────────────────────────────────────────────────────────────
+
+@router.get("/detections")
+def detections_endpoint(hours: int = Query(default=24, ge=1, le=720)):
+    """Behavioural patterns across recorded events, worst first.
+
+    The middleware blocks individual bad requests; this reports the actor
+    behind a run of them. Each finding carries its evidence and states what it
+    cannot distinguish, because an authorised pentest and a hostile scan look
+    identical from the server side.
+    """
+    return detections.detect(hours)
+
+
+@router.get("/source/{ip}")
+def source_endpoint(ip: str, hours: int = Query(default=168, ge=1, le=8760)):
+    """Everything recorded about one source, for the expanded row."""
+    return detections.source_profile(ip[:64], hours)
+
+
+# ── Blocklists ──────────────────────────────────────────────────────────────
+
+@router.get("/blocklist")
+def blocklist_endpoint():
+    """Both lists in one call; the console renders them side by side."""
+    return {
+        "available": get_db() is not None,
+        "targets": blocklist.list_targets(),
+        "sources": blocklist.list_sources(),
+    }
+
+
+class BlockTargetRequest(BaseModel):
+    host: str = Field(min_length=1, max_length=253)
+    reason: str = Field(default="", max_length=300)
+
+
+class BlockSourceRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=64)
+    reason: str = Field(default="", max_length=300)
+
+
+@router.post("/blocklist/targets")
+def block_target_endpoint(request: BlockTargetRequest, http_request: Request):
+    """Refuse to scan a host. Applies to subdomains of it as well."""
+    try:
+        entry = blocklist.block_target(request.host, reason=request.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    audit.record_scan_event(
+        "blocklist.target_added", http_request,
+        target=entry["host"], detail=entry["reason"],
+    )
+    return {"status": "blocked", **{k: v for k, v in entry.items() if k != "added_at"}}
+
+
+@router.delete("/blocklist/targets/{host}")
+def unblock_target_endpoint(host: str, http_request: Request):
+    try:
+        removed = blocklist.unblock_target(host)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail="Not on the blocklist")
+    audit.record_scan_event("blocklist.target_removed", http_request, target=host)
+    return {"status": "unblocked", "host": host}
+
+
+@router.post("/blocklist/sources")
+def block_source_endpoint(request: BlockSourceRequest, http_request: Request):
+    """Refuse to serve a caller. Accepts a single address or a CIDR range."""
+    try:
+        entry = blocklist.block_source(request.source, reason=request.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    audit.record_scan_event(
+        "blocklist.source_added", http_request,
+        detail=f"{entry['source']} — {entry['reason']}"[:300],
+    )
+    return {"status": "blocked", **{k: v for k, v in entry.items() if k != "added_at"}}
+
+
+@router.delete("/blocklist/sources/{source:path}")
+def unblock_source_endpoint(source: str, http_request: Request):
+    try:
+        removed = blocklist.unblock_source(source)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail="Not on the blocklist")
+    audit.record_scan_event("blocklist.source_removed", http_request, detail=source)
+    return {"status": "unblocked", "source": source}

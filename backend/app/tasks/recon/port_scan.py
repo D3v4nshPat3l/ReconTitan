@@ -36,6 +36,15 @@ DANGEROUS_PORTS = {
 
 
 def _hackertarget_portscan(target: str) -> str:
+    """Third-party port scan, used only when no local scanner is installed.
+
+    This hands the target address to api.hackertarget.com, so it stays off
+    unless the operator opts in. Scanning is often done under an authorization
+    that does not extend to disclosing the host to an unrelated service.
+    """
+    if not settings.ALLOW_HACKERTARGET:
+        logger.info("[portscan] HackerTarget fallback disabled (ALLOW_HACKERTARGET=false)")
+        return ""
     try:
         response = requests.get("https://api.hackertarget.com/nmap/", params={"q": target}, timeout=TIMEOUT)
         response.raise_for_status()
@@ -104,11 +113,33 @@ def run_port_scan(target: str) -> list[dict]:
         method = "hackertarget" if raw else ""
     if not raw:
         logger.warning("[portscan] no output for %s (%s)", domain, address)
+        # Say which of the three sources were even attempted. "No results"
+        # otherwise reads as "no open ports", which is the opposite conclusion
+        # when the real cause is that nothing ran.
+        local_available = bool(shutil.which("rustscan") or shutil.which("nmap"))
+        if local_available:
+            reason = "A local scanner ran but returned no parseable output."
+        elif settings.ALLOW_HACKERTARGET:
+            reason = (
+                "Neither rustscan nor nmap is installed, and the third-party "
+                "fallback returned no usable result."
+            )
+        else:
+            reason = (
+                "Neither rustscan nor nmap is installed, and the third-party "
+                "fallback is disabled (ALLOW_HACKERTARGET=false). No port scan "
+                "was performed — this is not evidence that no ports are open."
+            )
         return [{
             "tool": "port_scan", "category": "port_scan", "severity": "info",
-            "title": "Port Scan Produced No Results",
-            "description": "No local scanner result or third-party fallback result was available.",
+            "title": "Port Scan Did Not Run",
+            "description": reason,
             "evidence": f"Target: {domain}\nPinned address: {address}",
+            "remediation": (
+                "Install nmap (or rustscan) on the scanner host to run this check locally, "
+                "or set ALLOW_HACKERTARGET=true to permit the third-party fallback — which "
+                "discloses the target address to api.hackertarget.com."
+            ),
         }]
 
     open_ports = _parse_open_ports(raw)

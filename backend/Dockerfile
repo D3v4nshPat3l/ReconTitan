@@ -23,7 +23,16 @@ FROM python:3.11-slim AS runtime
 # Security: run as non-root
 RUN groupadd --gid 10001 recontitan && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin recontitan
 
-# System tools used by scan tasks
+# System tools used by scan tasks.
+#
+# Of the modules that shell out (see app/services/capabilities.py), this image
+# provides nmap only. Absent: subfinder, amass, theHarvester (passive), and
+# nuclei, nikto, ffuf/gobuster, sqlmap (active — intentionally not shipped,
+# they stay opt-in). Every one of those modules now reports that it was
+# skipped, and GET /api/capabilities lists them under
+# binary_modules_unavailable, so reduced coverage is visible rather than
+# looking like a clean result. To add the passive Go tools, see
+# "Installing the optional scanners" in README.md.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         wget \

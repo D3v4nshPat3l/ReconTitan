@@ -51,6 +51,31 @@ def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
     return value
 
 
+def _named_keys(name: str) -> dict[str, str]:
+    """Parse ``label:secret`` pairs into a {secret: label} lookup.
+
+    Keyed by secret because the hot path is "is this supplied value valid", and
+    a dict keyed the other way would need a linear scan. Entries without a
+    colon are accepted as an unlabelled secret so a bare comma-separated list
+    still works.
+    """
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return {}
+    keys: dict[str, str] = {}
+    for index, entry in enumerate(raw.split(","), 1):
+        entry = entry.strip()
+        if not entry:
+            continue
+        label, separator, secret = entry.partition(":")
+        if not separator:
+            label, secret = f"key-{index}", entry
+        label, secret = label.strip(), secret.strip()
+        if secret:
+            keys[secret] = label or f"key-{index}"
+    return keys
+
+
 #: Tool counts per phase, used only to size the orchestrator's time budget.
 #: Kept here rather than imported from app.tasks so config stays dependency-free.
 RECON_TOOL_COUNT = 8
@@ -77,13 +102,27 @@ class Settings:
 
         # Application
         self.APP_NAME = "ReconTitan"
-        self.APP_VERSION = "0.4.1"
+        self.APP_VERSION = "0.5.0"
         self.DEBUG = _env_bool("RECONTITAN_DEBUG", True)
 
         # Domain / security
         self.DOMAIN = os.getenv("DOMAIN", "localhost").strip().lower()
         self.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
         self.API_ACCESS_KEY = os.getenv("API_ACCESS_KEY", "").strip()
+
+        # Named API keys, so a deployment is not limited to one shared secret
+        # with no way to tell callers apart and no way to revoke one of them
+        # without cutting off everybody. Format:
+        #
+        #   API_ACCESS_KEYS=ci:<key>,scanner-ui:<key>,alice:<key>
+        #
+        # The name is an audit label only -- it carries no privileges, because
+        # these are still all-or-nothing credentials. What it buys is
+        # attribution ("which caller made this request") and independent
+        # revocation (delete one entry, restart, the rest keep working).
+        # API_ACCESS_KEY continues to work unchanged and is recorded as
+        # "default", so no existing deployment has to change anything.
+        self._NAMED_API_KEYS = _named_keys("API_ACCESS_KEYS")
         self.ALLOW_PRIVATE_TARGETS = _env_bool("ALLOW_PRIVATE_TARGETS", False)
         self.ENABLE_ACTIVE_VULN_TOOLS = _env_bool("ENABLE_ACTIVE_VULN_TOOLS", False)
         self.MAX_REQUEST_BODY_BYTES = _env_int("MAX_REQUEST_BODY_BYTES", 2 * 1024 * 1024, minimum=1024)
@@ -124,9 +163,50 @@ class Settings:
         self.MONGO_PASS = os.getenv("MONGO_PASS", "")
         self.MONGO_AUTH_SOURCE = os.getenv("MONGO_AUTH_SOURCE", self.MONGO_DB)
 
-        # OpenAI
+        # AI narration layer.
+        # The scanners themselves stay pure Python — the model never decides
+        # what is a finding, it only explains findings that were already
+        # produced. AI_PROVIDER selects the backend:
+        #   auto   — Ollama if reachable, else OpenAI if keyed, else static text
+        #   ollama — local Ollama only
+        #   openai — hosted OpenAI only
+        #   none   — disable AI entirely, always use the built-in fallbacks
+        self.AI_PROVIDER = os.getenv("AI_PROVIDER", "auto").strip().lower()
+        if self.AI_PROVIDER not in {"auto", "ollama", "openai", "none"}:
+            raise RuntimeError("AI_PROVIDER must be one of: auto, ollama, openai, none")
+
+        # Ollama (local, no API key, no data leaves the host)
+        self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip().rstrip("/")
+        # Blank means "use whatever is installed" — the module resolves the
+        # first model from /api/tags, so a fresh clone works against any pull.
+        self.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "").strip()
+        # A cold model load can take tens of seconds; a scan-summary generation
+        # on CPU is slower still. Kept separate from the HTTP scanner timeouts.
+        self.OLLAMA_TIMEOUT = _env_int("OLLAMA_TIMEOUT", 120, minimum=5)
+        self.OLLAMA_NUM_CTX = _env_int("OLLAMA_NUM_CTX", 4096, minimum=512)
+        self.OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "5m").strip()
+
+        # Inline narration budget. Each explanation is one model round-trip, and
+        # a local CPU model can take several seconds each, so the synchronous
+        # scan endpoint caps both the count and the total wall-clock spend
+        # rather than letting a slow model hold the request open.
+        self.AI_MAX_FINDING_EXPLANATIONS = _env_int("AI_MAX_FINDING_EXPLANATIONS", 8, minimum=0)
+        self.AI_EXPLANATION_BUDGET_SECONDS = _env_int("AI_EXPLANATION_BUDGET_SECONDS", 90, minimum=5)
+        self.AI_EXPLANATION_CONCURRENCY = _env_int("AI_EXPLANATION_CONCURRENCY", 2, minimum=1)
+
+        # OpenAI (optional hosted fallback)
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+        # Keyless third-party lookups that receive the target address.
+        #
+        # api.hackertarget.com was called unconditionally by the port scan
+        # fallback and the reverse-IP lookup: no key, no flag, and no mention
+        # in the docs, so an operator scanning a client's host silently shipped
+        # that host to a third party. The project already removed an automatic
+        # web-check.xyz submission for exactly this reason. Off by default;
+        # skipped lookups are reported rather than hidden.
+        self.ALLOW_HACKERTARGET = _env_bool("ALLOW_HACKERTARGET", False)
 
         # Threat intelligence API keys
         self.VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "")
@@ -192,7 +272,23 @@ class Settings:
         # forges HTTP requests for a living, so that risk is real).
         self.ADMIN_ENABLED = _env_bool("ADMIN_ENABLED", False)
         self.ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
+        # Accepted alongside ADMIN_TOKEN during a rotation. Without this,
+        # changing the token is a flag day: every existing session and script
+        # breaks the instant the process restarts, which is why in practice
+        # tokens never get rotated at all. Set the old value here, deploy the
+        # new one, confirm nothing is still using the old, then clear it.
+        self.ADMIN_TOKEN_PREVIOUS = os.getenv("ADMIN_TOKEN_PREVIOUS", "").strip()
         self.ADMIN_PORT = _env_int("ADMIN_PORT", 9000, minimum=1)
+        # Network allowlist for the admin surface, as addresses or CIDR ranges.
+        # Empty means unrestricted, matching the previous behaviour so an
+        # upgrade cannot lock an operator out of their own console. When set, a
+        # caller outside the list never reaches the token check at all, so the
+        # token stops being the only thing between the internet and the console.
+        self.ADMIN_IP_ALLOWLIST = [
+            entry.strip()
+            for entry in os.getenv("ADMIN_IP_ALLOWLIST", "").split(",")
+            if entry.strip()
+        ]
         self.ADMIN_MIN_TOKEN_LENGTH = _env_int("ADMIN_MIN_TOKEN_LENGTH", 32, minimum=32)
         self.ADMIN_MAX_FAILURES = _env_int("ADMIN_MAX_FAILURES", 5, minimum=1)
         self.ADMIN_LOCKOUT_SECONDS = _env_int("ADMIN_LOCKOUT_SECONDS", 900, minimum=30)
@@ -202,6 +298,14 @@ class Settings:
         # become a hole: rate limits multiply by instance count and admin
         # lockout can be sidestepped by landing on a fresh instance.
         self.SERVERLESS = _env_bool("SERVERLESS", bool(os.getenv("VERCEL")))
+
+        # Trusting X-Forwarded-For is safe only when something in front of the
+        # app is guaranteed to overwrite it. Behind the Compose nginx, uvicorn
+        # already rewrites request.client, so this stays off. On a serverless
+        # platform there is no such rewrite and every visitor would otherwise be
+        # recorded as the platform's own proxy address, making the audit trail
+        # useless for attribution -- so it defaults on there, and only there.
+        self.TRUST_PROXY_HEADERS = _env_bool("TRUST_PROXY_HEADERS", self.SERVERLESS)
         # Share rate-limit and lockout counters through Redis. Required for any
         # multi-instance deployment; harmless on a single node.
         self.SHARED_STATE_ENABLED = _env_bool("SHARED_STATE_ENABLED", bool(self.REDIS_PASSWORD or os.getenv("REDIS_URL")))
@@ -250,6 +354,20 @@ class Settings:
         return self.SCAN_SOFT_TIME_LIMIT + 60
 
     @property
+    def API_ACCESS_KEYS(self) -> dict[str, str]:
+        """{secret: label} for every accepted key.
+
+        Derived rather than snapshotted in __init__ so that assigning
+        ``settings.API_ACCESS_KEY`` at runtime still changes what the gate
+        accepts -- the tests rely on that, and so would any operator poking at
+        a live process.
+        """
+        keys = dict(self._NAMED_API_KEYS)
+        if self.API_ACCESS_KEY:
+            keys.setdefault(self.API_ACCESS_KEY, "default")
+        return keys
+
+    @property
     def REDIS_URL(self) -> str:
         # Managed Redis providers hand out a single connection string; prefer it
         # over the host/port/password triple when present.
@@ -262,6 +380,16 @@ class Settings:
 
     @property
     def MONGO_URI(self) -> str:
+        # A managed provider hands out one connection string, and Atlas uses the
+        # mongodb+srv:// scheme whose host is a DNS SRV record rather than a
+        # host:port pair. Nothing built from MONGO_HOST/PORT can express that,
+        # so a full URI has to win outright — without this, a serverless deploy
+        # silently falls back to localhost and every panel reads "MongoDB
+        # unavailable" with nothing explaining why.
+        direct = os.getenv("MONGO_URI", "").strip()
+        if direct:
+            return direct
+
         if self.MONGO_USER and self.MONGO_PASS:
             return (
                 f"mongodb://{quote_plus(self.MONGO_USER)}:{quote_plus(self.MONGO_PASS)}"
@@ -279,8 +407,23 @@ class Settings:
             errors.append("SECRET_KEY must be a random value of at least 32 characters")
         if self.CORS_ORIGINS == ["*"]:
             errors.append("CORS_ORIGINS cannot be '*' in production")
-        if len(self.API_ACCESS_KEY) < 32:
-            errors.append("API_ACCESS_KEY must be a random value of at least 32 characters")
+        # Production must be authenticated, but it no longer matters *which*
+        # variable supplies the credential -- a deployment using only named keys
+        # is fully configured and must not be told to set API_ACCESS_KEY.
+        if not self.API_ACCESS_KEYS:
+            errors.append(
+                "API_ACCESS_KEY (or API_ACCESS_KEYS) must be set to a random value "
+                "of at least 32 characters"
+            )
+        else:
+            weak = sorted(
+                label for secret, label in self.API_ACCESS_KEYS.items() if len(secret) < 32
+            )
+            if weak:
+                errors.append(
+                    "API access keys must be random values of at least 32 characters; "
+                    f"too short: {', '.join(weak)}"
+                )
         if self.DOMAIN == "localhost":
             errors.append("DOMAIN must be set in production")
         if errors:

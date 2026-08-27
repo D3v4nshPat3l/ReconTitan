@@ -22,7 +22,7 @@
 
 <br>
 
-[**Quick Start**](#-quick-start) · [**Features**](#-features) · [**Screenshots**](#-screenshots) · [**Danger Mode**](#-danger-mode) · [**API**](#-api-reference) · [**Docs**](docs/DANGER_MODE.md)
+[**Quick Start**](#-quick-start) · [**Deployment**](docs/DEPLOYMENT.md) · [**Ollama Setup**](docs/OLLAMA_SETUP.md) · [**Features**](#-features) · [**Screenshots**](#-screenshots) · [**Danger Mode**](#-danger-mode) · [**API**](#-api-reference) · [**Docs**](docs/DANGER_MODE.md)
 
 </div>
 
@@ -718,7 +718,10 @@ Authorization: Bearer your-access-key
 | `GET` | `/api/scan/{id}/report` | Protected | Normalized JSON report |
 | `GET` | `/api/scan/{id}/report.pdf` | Protected | Export a stored scan as PDF |
 | `POST` | `/api/report/pdf` | Protected | Render supplied scan data as PDF |
-| `POST` | `/api/verify` | Protected | AI-assisted finding verification |
+| `POST` | `/api/verify` | Protected | AI triage of one finding — verdict, impact, remediation |
+| `GET` | `/api/ai/status` | Protected | Which AI backend is live (ollama / openai / fallback) |
+| `POST` | `/api/ai/explain` | Protected | Explain a security topic or scan category |
+| `POST` | `/api/ai/explain-finding` | Protected | Short plain-English explanation of one finding |
 
 <details>
 <summary><b>Examples</b></summary>
@@ -888,11 +891,300 @@ Seeing **"budget exhausted"** or **"time limit reached"** in a report means cove
 
 <br>
 
-`OPENAI_API_KEY`, `VIRUSTOTAL_API_KEY`, `SHODAN_API_KEY`, `CENSYS_API_ID`, `CENSYS_API_SECRET`, `GREYNOISE_API_KEY`, `SECURITYTRAILS_API_KEY`, `URLSCAN_API_KEY`, `INTELX_API_KEY`.
+**Keyless services contacted on every default scan.** These need no configuration, so it is
+easy to miss that they receive the target you are scanning:
+
+| Service | Used by | What it receives |
+|---|---|---|
+| `crt.sh` | subdomain enumeration, takeover checks | the domain |
+| `ipinfo.io` | IP geolocation / ASN | the resolved IP |
+| `web.archive.org` | historical URL discovery | the domain |
+| `api.hackertarget.com` | port-scan fallback, reverse-IP lookup | the resolved IP |
+
+The first three are intrinsic to the modules named after them and are credited as the tool on
+every finding they produce. **`api.hackertarget.com` is opt-in** (`ALLOW_HACKERTARGET`, default
+`false`) because it was neither named in the UI nor required for the scan to work: it was a
+silent fallback. Your authorization to scan a host does not automatically extend to disclosing
+that host to an unrelated service. With it disabled and no local `nmap`/`rustscan` installed,
+the port scan reports **"Port Scan Did Not Run"** rather than implying no ports are open.
+
+**Keyed integrations** (all optional, all fail soft):
+`OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `VIRUSTOTAL_API_KEY`, `SHODAN_API_KEY`, `CENSYS_API_ID`, `CENSYS_API_SECRET`, `GREYNOISE_API_KEY`, `SECURITYTRAILS_API_KEY`, `URLSCAN_API_KEY`, `INTELX_API_KEY`.
 
 Each is optional and fails soft. Some submit the target to a third party — review their privacy and retention policy before enabling.
 
 </details>
+
+---
+
+## 🔑 API access keys
+
+Protected endpoints accept `X-ReconTitan-Key: <secret>` or `Authorization: Bearer <secret>`.
+
+**One shared key** — the original behaviour, unchanged:
+
+```bash
+API_ACCESS_KEY=<32+ character random value>
+```
+
+**Named keys**, when you want to know which caller acted and to revoke one of them
+independently:
+
+```bash
+API_ACCESS_KEYS=ci:<secret>,scanner-ui:<secret>,alice:<secret>
+```
+
+Both may be set at once; a key supplied via `API_ACCESS_KEY` is recorded as `default`.
+
+The label is an **audit handle, not a privilege** — every key still grants the same
+all-or-nothing access. What it buys is:
+
+- **Attribution.** The audit trail records `api_caller: "ci"` alongside the IP and path, so a
+  scan can be traced to a caller rather than to "somebody who held the secret". The secret
+  itself is never written to the trail.
+- **Independent revocation.** Delete one entry and restart; every other key keeps working.
+  Previously a leaked credential meant rotating the one secret every consumer shared.
+
+Production validation requires at least one key of 32+ characters and names any that are too
+short, so a weak entry in a list of five is identifiable.
+
+> **This is not user accounts.** There are no roles, no per-key scopes, and no revocation
+> history — revoking means editing configuration and restarting. If you need real identities,
+> put an authenticating proxy in front of the API.
+
+---
+
+## 🗄️ Migrating an existing MongoDB deployment
+
+`mongo/init/01-create-app-user.js` runs only from `/docker-entrypoint-initdb.d`, which Mongo
+executes **once, when the data directory is empty**. A deployment created before that script
+existed therefore has no application user, and never will — the volume is not empty, so the
+hook never fires again. Those deployments keep running as the Mongo **root** user, which
+defeats the privilege separation the script was written to establish.
+
+`mongo/migrate-existing-deployment.js` fixes that in place. It is idempotent and safe to run
+repeatedly:
+
+```bash
+docker compose cp mongo/migrate-existing-deployment.js mongo:/tmp/migrate.js
+```
+
+```bash
+docker compose exec -T mongo mongosh -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASS" --authenticationDatabase admin --eval "var APP_DB='recontitan', APP_USER='recontitan_app', APP_PASS='<password>', ROTATE=false" /tmp/migrate.js
+```
+
+It creates the user when absent, adds the `readWrite` grant if the user exists without it,
+and verifies the `scans` indexes so a migrated database matches a freshly initialised one.
+Pass `ROTATE=true` to reset an existing user's password — left `false`, an existing password
+is never touched, so running this against a healthy deployment cannot lock the application
+out.
+
+Then point the application at the app user and restart:
+
+```bash
+docker compose up -d --force-recreate api worker
+```
+
+---
+
+## 🔧 Installing the optional scanners
+
+Several modules shell out to an external binary. The Docker image ships **nmap** only, so on a
+default deployment the rest are skipped. That is now visible rather than silent — each reports
+a *"Not Installed — Skipped"* finding, and `GET /api/capabilities` lists them under
+`binary_modules_unavailable`. **A skipped module is never evidence that the target is unaffected.**
+
+| Binary | Module | Ships in image | Nature |
+|---|---|---|---|
+| `nmap` | port scan | ✅ yes | passive |
+| `subfinder` | subdomain enumeration | ❌ no | passive |
+| `amass` | subdomain enumeration | ❌ no | passive |
+| `theHarvester` | OSINT aggregation | ❌ no | passive |
+| `nuclei`, `nikto`, `ffuf`/`gobuster`, `sqlmap` | active vuln checks | ❌ no | **active — opt-in by design** |
+
+The active four are deliberately absent: they send intrusive traffic and stay disabled until
+explicitly enabled *and* installed.
+
+To add the passive Go tools, insert a builder stage in `backend/Dockerfile` before the runtime
+stage:
+
+```dockerfile
+FROM golang:1.23-bookworm AS tools
+RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@v2.6.6 \
+ && go install github.com/owasp-amass/amass/v4/...@v4.2.0
+```
+
+and copy them into the runtime stage:
+
+```dockerfile
+COPY --from=tools /go/bin/subfinder /usr/local/bin/subfinder
+COPY --from=tools /go/bin/amass /usr/local/bin/amass
+```
+
+> **Check the version tags before building.** Pin to current released tags rather than `@latest`
+> — an unpinned install is exactly the supply-chain gap the audit flags. `amass` in particular
+> adds roughly 100 MB to the image, so skip it if `subfinder` plus `crt.sh` gives you enough
+> coverage; the two overlap heavily for passive enumeration.
+
+`theHarvester` installs with `pip install theHarvester`, but it pulls a large dependency tree
+into the runtime image — prefer running it on a separate host if you need it.
+
+---
+
+## 🧠 AI explanations (Ollama)
+
+ReconTitan finds vulnerabilities with deterministic Python — no model is
+involved in deciding what a finding is. The AI layer sits **on top** of that
+result and does one job: turn scanner output into something a human can act on.
+If no model is reachable, every AI surface falls back to built-in static text,
+so a scan never fails because AI is down.
+
+**What the model is asked to do**
+
+| Surface | Endpoint | What you get |
+|---|---|---|
+| Executive summary on the report | automatic, at end of scan | Risk level, 2–3 sentence posture summary, top recommendations |
+| Per-finding explanation | automatic, top findings | Plain English: what it is, what goes wrong, how to fix |
+| **🤖 Verify with AI** button | `POST /api/verify` | Triage verdict + confidence, attacker impact, remediation steps, references |
+| **🧠 Explain this topic** button | `POST /api/ai/explain` | Teaches the *concept* behind the finding (what CORS is, why HSTS matters) |
+
+> **What "Verify with AI" does — and does not do.** It does **not** re-attack the
+> target. No packet is sent to the host when you press it. It sends the finding
+> the scanner already recorded — title, severity, evidence — to the model and asks
+> for a second opinion: does this evidence actually support a real issue, or is it
+> scanner noise? You get back one of `TRUE_POSITIVE`, `LIKELY_TRUE_POSITIVE`,
+> `NEEDS_MANUAL_REVIEW`, or `LIKELY_FALSE_POSITIVE`, with a confidence level,
+> plus impact and fix steps. Treat it as triage assistance, not proof — a local
+> model can be wrong in both directions, which is why the verdict set includes
+> "needs manual review" and the report still shows the raw evidence underneath.
+
+### Setup
+
+<details open>
+<summary><b>1. Install and start Ollama</b></summary>
+
+<br>
+
+Download from [ollama.com](https://ollama.com), then pull a model:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+Smaller boxes can use `qwen2.5:1.5b-instruct` (~1 GB, runs on CPU) or
+`llama3.2:3b`. Bigger models write noticeably better security prose; the 1.5B
+class is usable but terse and occasionally imprecise.
+
+Confirm the server is up — it listens on `11434` by default:
+
+```bash
+curl http://localhost:11434/api/tags
+```
+
+</details>
+
+<details open>
+<summary><b>2. Point ReconTitan at it</b></summary>
+
+<br>
+
+In `.env`:
+
+```bash
+AI_PROVIDER=auto
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=
+```
+
+Leaving `OLLAMA_MODEL` blank auto-selects the first installed model, so this
+works against whatever you pulled. Set it explicitly to pin one.
+
+`AI_PROVIDER` controls the whole layer:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | Ollama if reachable, else OpenAI if keyed, else static text |
+| `ollama` | Local model only — nothing ever leaves the host |
+| `openai` | Hosted OpenAI only |
+| `none` | AI fully disabled; every surface uses the built-in explanations |
+
+</details>
+
+<details>
+<summary><b>3. Running in Docker</b></summary>
+
+<br>
+
+The compose file defaults to `http://host.docker.internal:11434`, which reaches
+an Ollama running on your host machine (`extra_hosts` is declared so this also
+resolves on Linux). Nothing else to do if Ollama is already installed natively.
+
+To run Ollama **inside** compose instead, add a service and point the URL at it:
+
+```yaml
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+```
+
+then set `OLLAMA_BASE_URL=http://ollama:11434` and add `ollama_models:` under
+the top-level `volumes:` key. Note the container needs a GPU passthrough
+(`deploy.resources.reservations.devices`) to be fast — on CPU it works but a
+full scan summary takes tens of seconds.
+
+</details>
+
+<details>
+<summary><b>4. Verify it is live</b></summary>
+
+<br>
+
+```bash
+curl -s http://localhost:8000/api/ai/status
+```
+
+`active_backend` tells you what is actually answering:
+
+```json
+{"provider":"auto","active_backend":"ollama","model":"llama3.1:8b",
+ "ollama":{"available":true,"error":""}}
+```
+
+If it says `"active_backend":"fallback"`, the `ollama.error` field explains why
+— connection refused means Ollama is not running, and an empty model list means
+nothing has been pulled. The report page shows the same information as a badge
+next to the AI buttons, so you can always tell a model's answer from a
+canned one.
+
+</details>
+
+### Cost controls
+
+Every explanation is one model round-trip, and a local CPU model can take
+seconds each. The per-scan narration budget is capped three ways, so a slow
+model can never hold a scan open:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AI_MAX_FINDING_EXPLANATIONS` | `8` | How many findings get an inline explanation (highest severity first) |
+| `AI_EXPLANATION_BUDGET_SECONDS` | `90` | Wall-clock ceiling for the whole narration pass |
+| `AI_EXPLANATION_CONCURRENCY` | `2` | Parallel requests to the model |
+| `OLLAMA_TIMEOUT` | `120` | Per-request timeout; a cold model load is slow |
+| `OLLAMA_NUM_CTX` | `4096` | Context window |
+| `OLLAMA_KEEP_ALIVE` | `5m` | How long Ollama keeps the model resident between calls |
+
+Findings that run out of budget simply keep the static explanation the report
+already renders.
+
+### Privacy
+
+With `AI_PROVIDER=ollama` (or `auto` with Ollama reachable), finding text never
+leaves your machine — that is the main reason to prefer a local model here,
+since scan evidence can contain hostnames, paths, and tokens from the target.
+`AI_PROVIDER=openai` sends that same text to OpenAI; only enable it against
+targets whose data you are permitted to share with a third party.
 
 ---
 

@@ -1,0 +1,486 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ReconTitan — cinematic scroll stage
+
+   A sticky stage the page scrubs through. Everything is driven by custom
+   properties written from cinema.js on each animation frame; nothing here
+   animates on its own. That split matters: CSS owns layout and paint, JS owns
+   only the numbers, so the whole choreography can be reasoned about by reading
+   the variable table in one place.
+
+   Every visual is inline SVG. No external images, so the stage cannot break
+   because a CDN moved, and it recolours with the theme rather than being baked.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.cinema {
+  --mx: 0; --my: 0;
+
+  --backdrop-y: 0px; --backdrop-scale: 1.08; --backdrop-opacity: 1;
+  --grid-y: 0px; --grid-scale: 1; --grid-opacity: 1;
+  --rings-scale: 0.82; --rings-opacity: .55; --rings-spin: 0deg;
+  --scan-opacity: 0; --scan-y: 0px;
+  --skyline-y: 0px; --skyline-opacity: .95; --skyline-scale: 1.02;
+  --analyst-opacity: 0; --analyst-y: 40px; --analyst-scale: 1;
+  --pylon-opacity: 0; --pylon-y: 0px; --pylon-scale: 1.04;
+
+  --blur-px: 0px; --dim: 1;
+  --wash-top: 0; --wash-mid: 0; --wash-bottom: 0;
+  --wash-tint: 34, 211, 238;
+
+  --title-y: 0px; --title-scale: 1; --title-opacity: 1;
+  --lede-y: 0px; --lede-opacity: 1;
+
+  --core-x: -50%; --core-y: 0px; --core-scale: 1; --core-opacity: 1;
+  --half-l-x: -50%; --half-l-y: 0px; --half-l-scale: 1;
+  --half-r-x: -50%; --half-r-y: 0px; --half-r-scale: 1;
+  --deep-opacity: 0; --deep-scale: 1.06;
+
+  --panel1-opacity: 0; --panel1-y: calc(-50% + 58px);
+  --panel2-opacity: 0; --panel2-y: calc(-50% + 58px);
+
+  --rail-visibility: hidden;
+  --rail-enter-x: 420vw;
+  --rail-scale: 1;
+  --rail-shift: 0px; --rail-drag: 0px;
+  --rail-top: clamp(112px, 19vh, 220px);
+  --rail-controls-opacity: 0;
+
+  position: relative;
+  height: calc(100vh + 3700px);
+}
+
+.stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  min-height: 620px;
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 50% 120%, #10243a 0%, #080a0f 55%, #06070a 100%);
+}
+
+.stage > *, .layer { position: absolute; }
+
+/* ── Depth layers ────────────────────────────────────────────────────── */
+
+.layer {
+  inset: 0;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
+  background-repeat: no-repeat;
+}
+
+/* Perspective floor grid — kept as SVG. It has to align mathematically with
+   the horizon, which is easier to guarantee in geometry than in a photo. */
+.layer-grid {
+  z-index: 1;
+  opacity: var(--grid-opacity);
+  transform: translate3d(calc(var(--mx) * -18px), var(--grid-y), 0) scale(var(--grid-scale));
+  filter: blur(var(--blur-px)) brightness(var(--dim));
+}
+
+/* ── Painted layers ──────────────────────────────────────────────────── */
+/*
+   Five of the six images arrived near-black on black. `lighten` composites
+   them against the stage by keeping whichever pixel is brighter, so their
+   backgrounds merge instead of stacking up as visible rectangles — no alpha
+   channel required, and no halo where a cut-out would have been.
+
+   Each also carries a soft mask so it fades out at its own edges. A gradient
+   that reaches the frame boundary at full strength always reads as a pasted
+   photo, however good the art is.
+*/
+.layer-art {
+  background-repeat: no-repeat;
+  background-position: center bottom;
+  background-size: cover;
+}
+
+/* Backdrop sits behind everything and is the only layer composited normally:
+   it *is* the sky, so it should paint over the stage gradient rather than
+   lighten it. */
+.layer-backdrop {
+  z-index: 0;
+  background-image: url('assets/backdrop.webp');
+  background-position: center 30%;
+  opacity: var(--backdrop-opacity);
+  transform: translate3d(calc(var(--mx) * -8px), var(--backdrop-y), 0) scale(var(--backdrop-scale));
+  filter: blur(var(--blur-px)) brightness(var(--dim));
+}
+
+.layer-rings {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  opacity: var(--rings-opacity);
+  transform: translate3d(calc(var(--mx) * -26px), calc(var(--my) * -10px), 0)
+             scale(var(--rings-scale)) rotate(var(--rings-spin));
+  filter: blur(var(--blur-px)) brightness(var(--dim));
+}
+.layer-rings svg { width: min(150vh, 150vw); height: auto; }
+
+.layer-skyline {
+  z-index: 2;
+  background-image: url('assets/skyline.webp');
+  background-size: 118% auto;
+  mix-blend-mode: lighten;
+  opacity: var(--skyline-opacity);
+  transform: translate3d(calc(var(--mx) * -34px), var(--skyline-y), 0) scale(var(--skyline-scale));
+  transform-origin: 50% 100%;
+  filter: blur(var(--blur-px)) brightness(var(--dim));
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
+}
+
+/* Sweeping scan bar that crosses the stage as the second act opens. */
+.layer-scan {
+  z-index: 3;
+  opacity: var(--scan-opacity);
+  transform: translate3d(0, var(--scan-y), 0);
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(34, 211, 238, .00) 42%,
+    rgba(34, 211, 238, .45) 50%,
+    rgba(34, 211, 238, .00) 58%,
+    transparent 100%);
+  mix-blend-mode: screen;
+}
+
+/* Revealed once the core splits open. */
+.layer-deep {
+  z-index: 3;
+  background-image: url('assets/monolith.webp');
+  background-position: center 45%;
+  mix-blend-mode: lighten;
+  opacity: var(--deep-opacity);
+  transform: translate3d(calc(var(--mx) * 10px), calc(var(--my) * 8px), 0) scale(var(--deep-scale));
+  -webkit-mask-image: radial-gradient(ellipse 62% 74% at 50% 52%, #000 42%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 74% at 50% 52%, #000 42%, transparent 100%);
+}
+
+/* The operations floor: the room the work happens in. */
+.layer-analyst {
+  z-index: 4;
+  background-image: url('assets/ops-floor.webp');
+  background-size: cover;
+  mix-blend-mode: lighten;
+  opacity: var(--analyst-opacity);
+  transform: translate3d(calc(var(--mx) * 14px), var(--analyst-y), 0) scale(var(--analyst-scale));
+  transform-origin: 50% 100%;
+  -webkit-mask-image: radial-gradient(ellipse 74% 88% at 50% 68%, #000 44%, transparent 100%);
+  mask-image: radial-gradient(ellipse 74% 88% at 50% 68%, #000 44%, transparent 100%);
+}
+
+/* Foreground pylons. Fastest parallax in the scene — nearest to camera. */
+.layer-pylons {
+  z-index: 5;
+  background-image: url('assets/pylons.webp');
+  background-size: cover;
+  background-position: center;
+  mix-blend-mode: lighten;
+  opacity: var(--pylon-opacity);
+  transform: translate3d(calc(var(--mx) * -52px), var(--pylon-y), 0) scale(var(--pylon-scale));
+}
+
+/* ── Core object ─────────────────────────────────────────────────────── */
+/*
+   The sphere ships with a real alpha channel, so it needs no keying and no
+   mask — an earlier circular mask was cutting into its outer glow. It is
+   composited with `screen` so the dark interior drops away and the wireframe
+   reads as a projection with the scene visible through it, rather than as a
+   solid ball occluding everything behind.
+
+   Both halves reference the same file and differ only in clip-path, so the
+   split is a real cut through one image rather than two assets that have to
+   be kept in register.
+*/
+
+.core {
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  width: min(62vh, 50vw);
+  aspect-ratio: 1;
+  margin-top: min(-31vh, -25vw);
+}
+
+.core-piece {
+  position: absolute;
+  inset: 0;
+  background-image: url('assets/core-sphere.webp');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  mix-blend-mode: screen;
+}
+
+.core-whole {
+  opacity: var(--core-opacity);
+  transform: translate3d(var(--core-x), var(--core-y), 0) scale(var(--core-scale));
+}
+
+.core-half { opacity: calc(1 - var(--core-opacity)); }
+.core-half-l {
+  clip-path: inset(0 50% 0 0);
+  transform: translate3d(var(--half-l-x), var(--half-l-y), 0) scale(var(--half-l-scale));
+  transform-origin: 21% 52%;
+}
+.core-half-r {
+  clip-path: inset(0 0 0 50%);
+  transform: translate3d(var(--half-r-x), var(--half-r-y), 0) scale(var(--half-r-scale));
+  transform-origin: 79% 52%;
+}
+
+/* ── Atmospheric wash ────────────────────────────────────────────────── */
+
+.wash {
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(var(--wash-tint), var(--wash-top)) 0%,
+    rgba(var(--wash-tint), var(--wash-mid)) 48%,
+    rgba(var(--wash-tint), var(--wash-bottom)) 100%);
+}
+
+/* ── Title ───────────────────────────────────────────────────────────── */
+
+.cinema-title {
+  z-index: 8;
+  left: 50%;
+  top: clamp(96px, 17vh, 190px);
+  width: min(94vw, 1500px);
+  margin: 0;
+  font-family: var(--sans);
+  font-size: clamp(3.4rem, 12.5vw, 11rem);
+  font-weight: 600;
+  line-height: .84;
+  letter-spacing: -.045em;
+  text-align: center;
+  color: #eef6ff;
+  transform: translate3d(-50%, var(--title-y), 0) scale(var(--title-scale));
+  opacity: var(--title-opacity);
+  will-change: transform, opacity;
+}
+.cinema-title em {
+  font-style: normal;
+  color: transparent;
+  background: linear-gradient(94deg, #22d3ee 8%, #7c85ff 62%, #c084fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.cinema-lede {
+  z-index: 8;
+  left: 50%;
+  bottom: clamp(56px, 22vh, 300px);
+  width: min(600px, calc(100vw - 40px));
+  text-align: center;
+  transform: translate3d(-50%, var(--lede-y), 0);
+  opacity: var(--lede-opacity);
+  will-change: transform, opacity;
+}
+.cinema-lede p {
+  margin: 0 auto;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: #c6d4e6;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .5);
+}
+.cinema-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }
+.cinema-tags span {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 18px;
+  border: 1px solid rgba(124, 133, 255, .35);
+  border-radius: 999px;
+  background: rgba(12, 18, 30, .6);
+  backdrop-filter: blur(6px);
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: #d5def0;
+}
+
+/* ── Story panels ────────────────────────────────────────────────────── */
+
+.stage-panel {
+  z-index: 9;
+  left: 50%;
+  width: min(720px, calc(100vw - 42px));
+  text-align: center;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.stage-panel h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(2rem, 4.6vw, 3.6rem);
+  line-height: 1.02;
+  color: #f2f6ff;
+  text-shadow: 0 16px 38px rgba(0, 0, 0, .45);
+}
+.stage-panel p {
+  width: min(520px, 100%);
+  margin: 22px auto 0;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: #b9c6da;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .45);
+}
+
+.panel-one   { top: 58%; opacity: var(--panel1-opacity); transform: translate3d(-50%, var(--panel1-y), 0); }
+.panel-two   { top: 30%; opacity: var(--panel2-opacity); transform: translate3d(-50%, var(--panel2-y), 0); }
+
+.stage-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 48px;
+  width: min(440px, 100%);
+  margin: 44px auto 0;
+}
+.stage-facts dt {
+  font-family: var(--mono);
+  font-size: clamp(1.7rem, 3.4vw, 2.7rem);
+  font-weight: 500;
+  line-height: 1;
+  color: #22d3ee;
+}
+.stage-facts dd { margin: 12px 0 0; font-size: .92rem; line-height: 1.4; color: #b9c6da; }
+
+/* ── Capability rail ─────────────────────────────────────────────────── */
+/* Counter-scaled against the grid zoom so the cards stay screen-true while
+   the world behind them keeps moving. */
+
+.rail {
+  z-index: 7;
+  left: 0;
+  right: 0;
+  top: var(--rail-top);
+  visibility: var(--rail-visibility);
+  transform: translate3d(var(--rail-enter-x), 0, 0) scale(var(--rail-scale));
+  transform-origin: 0 0;
+  pointer-events: auto;
+  will-change: transform;
+}
+.rail-track {
+  display: flex;
+  align-items: stretch;
+  gap: clamp(14px, 1.1vw, 22px);
+  transform: translate3d(calc(var(--rail-shift) + var(--rail-drag) - 16vw), 0, 0);
+  transition: transform 640ms cubic-bezier(.22, 1, .36, 1);
+  will-change: transform;
+}
+/* Suppressed both while a drag is following the pointer and during the
+   invisible set-to-set jump, so neither animates. */
+.rail-track.is-jumping { transition: none; }
+
+/* pan-y keeps vertical scrolling — which drives the whole timeline — owned by
+   the browser, while horizontal gestures come to us. */
+.rail { touch-action: pan-y; cursor: grab; }
+.rail.is-dragging { cursor: grabbing; }
+.rail.is-dragging .rail-card { cursor: grabbing; }
+
+.rail-card {
+  position: relative;
+  flex: 0 0 clamp(360px, 27vw, 500px);
+  min-height: 268px;
+  padding: 30px;
+  text-align: left;
+  border: 1px solid rgba(124, 133, 255, .26);
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(20, 26, 40, .94), rgba(11, 14, 22, .96));
+  box-shadow: 0 18px 52px rgba(0, 0, 0, .45);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .2s, transform .2s;
+}
+.rail-card:hover { border-color: rgba(124, 133, 255, .55); }
+.rail-card.is-active { border-color: #22d3ee; transform: translateY(-4px); }
+.rail-card:focus-visible { outline: 2px solid #22d3ee; outline-offset: 3px; }
+
+.rail-kicker {
+  display: block;
+  font-family: var(--mono);
+  font-size: .74rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #7c85ff;
+  margin-bottom: 64px;
+}
+.rail-card h3 { margin: 0 0 10px; font-size: 1.24rem; font-weight: 600; color: #eef2ff; }
+.rail-card p { margin: 0; font-size: .92rem; line-height: 1.6; color: #a6b2c8; }
+
+.rail-glyph { position: absolute; top: 26px; right: 26px; width: 54px; height: 54px; opacity: .85; }
+
+.rail-controls {
+  z-index: 8;
+  left: clamp(20px, 4vw, 56px);
+  top: calc(var(--rail-top) + 300px);
+  display: flex;
+  gap: 12px;
+  opacity: var(--rail-controls-opacity);
+  pointer-events: none;
+}
+.rail-controls.is-ready { pointer-events: auto; }
+.rail-nav {
+  width: 50px; height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(124, 133, 255, .35);
+  border-radius: 999px;
+  background: rgba(16, 20, 32, .9);
+  color: #dfe6f5;
+  font-size: 1.1rem;
+  backdrop-filter: blur(8px);
+  transition: background .16s, border-color .16s;
+}
+.rail-nav:hover { background: rgba(124, 133, 255, .22); border-color: #7c85ff; }
+
+/* Scroll affordance — without it the sticky stage reads as a stuck page. */
+.scroll-hint {
+  z-index: 9;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #6b7a90;
+  opacity: var(--lede-opacity);
+}
+.scroll-hint i {
+  width: 1px; height: 26px;
+  background: linear-gradient(180deg, #22d3ee, transparent);
+  animation: hint 1.9s ease-in-out infinite;
+}
+@keyframes hint { 0%,100% { opacity: .25; transform: scaleY(.6); } 50% { opacity: 1; transform: scaleY(1); } }
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .core { width: min(52vh, 72vw); margin-top: min(-26vh, -36vw); }
+  .stage-facts { gap: 28px; margin-top: 32px; }
+}
+
+@media (max-width: 640px) {
+  .cinema { height: calc(100vh + 3000px); }
+  .cinema-title { top: 14vh; }
+  .cinema-lede { bottom: 84px; }
+  .cinema-lede p { font-size: .95rem; }
+  .rail-card { flex-basis: min(86vw, 360px); min-height: 240px; padding: 24px; }
+  .rail-controls { top: calc(var(--rail-top) + 244px); left: 20px; }
+  .stage-facts { grid-template-columns: 1fr; gap: 20px; }
+}
+
+/* Motion is decoration here; the composition still scrubs without it. */
+@media (prefers-reduced-motion: reduce) {
+  .layer, .core-whole, .core-half, .cinema-title, .cinema-lede,
+  .stage-panel, .rail, .rail-track { transition: none !important; }
+  .scroll-hint i { animation: none; }
+}

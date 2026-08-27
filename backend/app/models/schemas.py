@@ -109,13 +109,21 @@ class VerifyRequest(BaseModel):
     description: str = Field(default="", max_length=20_000)
 
 
+class TopicExplainRequest(BaseModel):
+    """Ask the AI layer to explain a security topic, category, or tool."""
+
+    topic: str = Field(min_length=1, max_length=200)
+    context: str = Field(default="", max_length=4_000)
+    audience: str = Field(default="developer", max_length=40)
+
+
 class ReportExportRequest(BaseModel):
     """Browser-supplied scan result used only to render a PDF."""
 
     scan_id: str = Field(default="manual", max_length=100)
     target: str = Field(min_length=1, max_length=253)
     scan_type: ScanType = ScanType.FULL
-    version: str = Field(default="0.4.1", max_length=40)
+    version: str = Field(default="0.5.0", max_length=40)
     status: str = Field(default="completed", max_length=40)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

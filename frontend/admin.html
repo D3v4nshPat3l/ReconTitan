@@ -5,31 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>ReconTitan — SOC Console</title>
+<meta name="theme-color" content="#0b0c0e">
 <link rel="icon" href="static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="static/admin.css">
+<link rel="stylesheet" href="static/admin.css?v=8">
 </head>
 <body>
 
 <div id="lock" class="lock">
   <div class="lock-card">
-    <div class="lock-brand"><span class="diamond"></span> RECON<b>TITAN</b> <span class="lock-tag">SOC</span></div>
+    <div class="lock-brand"><span class="diamond"></span> Recon<b>Titan</b> <span class="lock-tag">SOC</span></div>
     <p class="lock-note">Restricted console. This surface is not routed publicly and is reachable only over an SSH tunnel.</p>
-    <label class="lock-label" for="token">ADMIN TOKEN</label>
+    <label class="lock-label" for="token">Admin token</label>
     <input id="token" class="lock-input" type="password" autocomplete="off" spellcheck="false" placeholder="paste admin token">
-    <button id="unlock" class="lock-btn" type="button">AUTHENTICATE →</button>
+    <button id="unlock" class="lock-btn" type="button">Authenticate</button>
     <p id="lockErr" class="lock-err" hidden></p>
   </div>
 </div>
 
 <div id="app" class="app" hidden>
   <header class="topbar">
-    <div class="brand"><span class="diamond"></span> RECON<b>TITAN</b> <span class="badge">SOC CONSOLE</span></div>
+    <div class="brand"><span class="diamond"></span> Recon<b>Titan</b> <span class="badge">SOC CONSOLE</span></div>
     <nav class="nav">
       <button class="nav-a is-on" data-view="overview">Overview</button>
+      <button class="nav-a" data-view="detections">Detections</button>
       <button class="nav-a" data-view="threats">Threats</button>
       <button class="nav-a" data-view="events">Event Feed</button>
       <button class="nav-a" data-view="scans">Scan Activity</button>
+      <button class="nav-a" data-view="devices">Clients</button>
       <button class="nav-a" data-view="targets">Targets</button>
+      <button class="nav-a" data-view="blocklist">Blocklist</button>
     </nav>
     <div class="topbar-right">
       <select id="window" class="win-select" aria-label="Time window">
@@ -37,7 +41,7 @@
         <option value="24" selected>24h</option><option value="168">7d</option><option value="720">30d</option>
       </select>
       <span class="live"><span class="live-dot"></span><span id="liveLabel">LIVE</span></span>
-      <button id="logout" class="logout" type="button">LOCK</button>
+      <button id="logout" class="logout" type="button">Lock</button>
     </div>
   </header>
 
@@ -46,23 +50,66 @@
       <div class="kpis" id="kpis"></div>
       <div class="grid-2">
         <div class="panel">
-          <div class="panel-hdr"><span class="tag">// TRAFFIC VOLUME</span><h2>Hostile vs normal, hourly</h2></div>
+          <div class="panel-hdr"><span class="tag">Traffic Volume</span><h2>Hostile vs normal, hourly</h2></div>
           <div id="timeline" class="timeline"></div>
         </div>
         <div class="panel">
-          <div class="panel-hdr"><span class="tag">// ATTACK CLASSES</span><h2>What is being blocked</h2></div>
+          <div class="panel-hdr"><span class="tag">Attack Classes</span><h2>What is being blocked</h2></div>
           <div id="classes" class="classes"></div>
         </div>
       </div>
       <div class="panel">
-        <div class="panel-hdr"><span class="tag">// TOP SOURCES</span><h2>Most hostile activity</h2></div>
+        <div class="panel-hdr"><span class="tag">Top Sources</span><h2>Most hostile activity</h2></div>
         <div id="topThreats" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="detections" hidden>
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="tag">Detections</span>
+          <h2>Behavioural patterns, worst first</h2>
+        </div>
+        <p class="caveat" id="detectNote"></p>
+        <div id="detectList" class="detections"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="blocklist" hidden>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-hdr">
+            <span class="tag">Blocked targets</span>
+            <h2>Hosts ReconTitan will refuse to scan</h2>
+          </div>
+          <form class="block-form" id="targetForm">
+            <input class="filter-input" id="targetHost" placeholder="example.com" spellcheck="false" required>
+            <input class="filter-input" id="targetReason" placeholder="reason (optional)" spellcheck="false">
+            <button class="block-btn" type="submit">Block</button>
+          </form>
+          <p class="block-hint">Blocking a domain also blocks its subdomains. Enforced before any packet leaves.</p>
+          <div id="targetBlockTable" class="table-wrap"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-hdr">
+            <span class="tag">Blocked sources</span>
+            <h2>Callers this deployment refuses to serve</h2>
+          </div>
+          <form class="block-form" id="sourceForm">
+            <input class="filter-input" id="sourceValue" placeholder="203.0.113.4 or 203.0.113.0/24" spellcheck="false" required>
+            <input class="filter-input" id="sourceReason" placeholder="reason (optional)" spellcheck="false">
+            <button class="block-btn" type="submit">Block</button>
+          </form>
+          <p class="block-hint">Refused in middleware, before routing. Accepts a single address or a CIDR range.</p>
+          <div id="sourceBlockTable" class="table-wrap"></div>
+        </div>
       </div>
     </section>
 
     <section class="view" data-view="threats" hidden>
       <div class="panel">
-        <div class="panel-hdr"><span class="tag">// THREAT SOURCES</span><h2>Ranked by blocked volume</h2></div>
+        <div class="panel-hdr"><span class="tag">Threat Sources</span><h2>Ranked by blocked volume</h2></div>
         <div id="threatTable" class="table-wrap"></div>
       </div>
     </section>
@@ -70,7 +117,7 @@
     <section class="view" data-view="events" hidden>
       <div class="panel">
         <div class="panel-hdr">
-          <span class="tag">// EVENT FEED</span><h2>Raw security events, newest first</h2>
+          <span class="tag">Event Feed</span><h2>Raw security events, newest first</h2>
           <div class="filters">
             <select id="kindFilter" class="win-select"><option value="">all kinds</option></select>
             <input id="ipFilter" class="filter-input" placeholder="filter by source IP" spellcheck="false">
@@ -82,20 +129,43 @@
 
     <section class="view" data-view="scans" hidden>
       <div class="panel">
-        <div class="panel-hdr"><span class="tag">// SCAN ACTIVITY</span><h2>Every scan, with attribution</h2></div>
+        <div class="panel-hdr"><span class="tag">Scan Activity</span><h2>Every scan, with attribution</h2></div>
         <div id="scanTable" class="table-wrap"></div>
+      </div>
+    </section>
+
+    <section class="view" data-view="devices" hidden>
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="tag">Clients</span>
+          <h2>Everything reaching this deployment</h2>
+        </div>
+        <p class="caveat" id="deviceCaveat"></p>
+        <div id="deviceTable" class="table-wrap"></div>
       </div>
     </section>
 
     <section class="view" data-view="targets" hidden>
       <div class="panel">
-        <div class="panel-hdr"><span class="tag">// TARGETS</span><h2>Most-scanned targets and their sources</h2></div>
+        <div class="panel-hdr"><span class="tag">Targets</span><h2>Most-scanned targets and their sources</h2></div>
         <div id="targetTable" class="table-wrap"></div>
       </div>
     </section>
   </main>
 </div>
 
-<script src="static/admin.js"></script>
+<p id="flash" class="flash" hidden></p>
+
+<div id="sourceModal" class="modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-hdr">
+      <h3 id="modalTitle">Source</h3>
+      <button id="modalClose" class="modal-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div id="modalBody" class="modal-body"></div>
+  </div>
+</div>
+
+<script src="static/admin.js?v=8"></script>
 </body>
 </html>

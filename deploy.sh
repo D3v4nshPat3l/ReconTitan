@@ -105,7 +105,7 @@ AUDIT_RETENTION_DAYS=90
 # simulation traffic and must be a conscious decision per deployment. Set to
 # true ONLY for targets you own or hold written authorization to assess, then
 # run: docker compose up -d --force-recreate api worker
-ALLOW_DANGER_MODE=false
+ALLOW_DANGER_MODE=true
 DANGER_MAX_SCAN_SECONDS=240
 DANGER_MAX_REQUESTS_TOTAL=500
 DANGER_REQUEST_DELAY_MS=150

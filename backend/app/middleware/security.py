@@ -554,6 +554,60 @@ DANGEROUS_HEADERS = [
 # ═══════════════════════════════════════════════════════════
 # HELPER: stamp security headers onto any early-exit response
 # ═══════════════════════════════════════════════════════════
+def _blocked_source(request) -> dict | None:
+    """Return the blocklist entry covering this caller, or None.
+
+    Fail-open on any error. A database blip must not lock every user out of the
+    product; the blocklist is an operator convenience, not the security
+    boundary, and the boundary controls all still apply either way.
+    """
+    try:
+        from app.services import audit, blocklist
+
+        return blocklist.source_block(audit.client_ip(request))
+    except Exception:
+        return None
+
+
+def _match_api_key(supplied: str) -> str | None:
+    """Return the label of the matching key, or None.
+
+    Every configured key is compared even after a match so the work done is
+    independent of which key was supplied and of how many are configured --
+    returning early would leak key ordering through response timing. Each
+    individual comparison is already constant time.
+    """
+    if not supplied:
+        return None
+    matched: str | None = None
+    for secret, label in settings.API_ACCESS_KEYS.items():
+        if secrets.compare_digest(supplied, secret):
+            matched = label
+    return matched
+
+
+def _audit_access(request, status_code: int, path: str) -> None:
+    """Record a served request so the console shows normal use, not just attacks.
+
+    Static assets are skipped: they are numerous, carry no distinct meaning,
+    and the page load that pulled them is already recorded. Events coalesce by
+    (kind, ip, detail), so a busy client becomes one counted document rather
+    than one row per request.
+    """
+    if path.startswith("/api/health"):
+        return
+    if "." in path.rsplit("/", 1)[-1] and not path.startswith("/api/"):
+        return  # .css, .js, .svg, .png -- noise, not visits
+    try:
+        from app.services import audit
+
+        audit.record_security_event(
+            audit.ACCESS, request, detail=f"{request.method} {path}", status=status_code
+        )
+    except Exception:
+        pass
+
+
 def _audit_security(kind: str, request, detail: str = "", **fields):
     """Record an attacker-facing event without ever failing the request.
 
@@ -655,13 +709,28 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 _audit_security("ratelimit.exceeded", request, detail=path)
                 return _secure_response(limited, path)
 
+        # Operator-blocked sources are refused before routing, so a blocked
+        # caller cannot reach a scan endpoint, the admin surface, or anything
+        # else. Deliberately after rate limiting: a blocked source hammering the
+        # service should still be throttled rather than given a cheap 403 loop.
+        blocked_source = _blocked_source(request)
+        if blocked_source is not None:
+            _audit_security(
+                "source.blocked", request,
+                detail=str(blocked_source.get("reason", ""))[:120] or "operator blocklist",
+            )
+            return _secure_response(
+                JSONResponse(status_code=403, content={"error": "Forbidden"}), path
+            )
+
         public_api_paths = {"/api/health", "/api/news", "/api/capabilities", "/api/docs", "/api/redoc", "/api/openapi.json"}
-        if settings.API_ACCESS_KEY and path.startswith("/api/") and path not in public_api_paths:
+        if settings.API_ACCESS_KEYS and path.startswith("/api/") and path not in public_api_paths:
             supplied = request.headers.get("x-recontitan-key", "")
             authorization = request.headers.get("authorization", "")
             if not supplied and authorization.lower().startswith("bearer "):
                 supplied = authorization[7:].strip()
-            if not supplied or not secrets.compare_digest(supplied, settings.API_ACCESS_KEY):
+            caller = _match_api_key(supplied)
+            if caller is None:
                 _audit_security(
                     "auth.failed", request,
                     detail="missing key" if not supplied else "invalid key",
@@ -671,6 +740,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                     content={"error": "API access key required"},
                     headers={"WWW-Authenticate": "ReconTitan-Key"},
                 ), path)
+            # Attribute the request to the named key so the audit trail records
+            # *which* caller acted, not merely that someone held the secret.
+            request.state.api_caller = caller
 
         if path.startswith("/api/"):
             for key, value in request.query_params.multi_items():
@@ -686,7 +758,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
             if request.method in {"POST", "PUT", "PATCH"}:
                 content_length = request.headers.get("content-length")
-                json_only_paths = {"/api/scan", "/api/report/pdf", "/api/verify"}
+                json_only_paths = {
+                    "/api/scan",
+                    "/api/report/pdf",
+                    "/api/verify",
+                    "/api/ai/explain",
+                    "/api/ai/explain-finding",
+                }
                 content_type = request.headers.get("content-type", "").lower()
                 if path in json_only_paths and content_length != "0" and "application/json" not in content_type:
                     return _secure_response(
@@ -750,4 +828,5 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             del response.headers["x-powered-by"]
         response.headers["Server"] = "ReconTitan"
         response.headers["X-Request-ID"] = request_id
+        _audit_access(request, response.status_code, path)
         return response

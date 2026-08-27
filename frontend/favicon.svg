@@ -1,6 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#0e1014"/>
-  <path d="M16 4L28 10V22L16 28L4 22V10Z" stroke="#8bc34a" stroke-width="1.5" fill="none"/>
-  <circle cx="16" cy="16" r="4" fill="#8bc34a"/>
-  <circle cx="16" cy="16" r="1.5" fill="#0e1014"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="ReconTitan">
+  <!--
+    A favicon is read at 16px, where detail becomes mud. So this is one bold
+    silhouette: a scanning reticle whose ring is broken left and right, echoing
+    the sphere on the landing page splitting open.
+
+    Strokes are 2.6–3px against a 32px viewBox — heavy enough to survive being
+    halved. The centre dot is solid rather than outlined for the same reason:
+    at 16px a 1px ring closes up into a blob anyway, so it may as well be one
+    on purpose.
+  -->
+  <defs>
+    <linearGradient id="rt" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#7c85ff"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="7" fill="#0b0c0e"/>
+
+  <!-- Broken outer ring: two arcs with gaps at 9 and 3 o'clock -->
+  <g fill="none" stroke="url(#rt)" stroke-width="2.6" stroke-linecap="round">
+    <path d="M16 5.6a10.4 10.4 0 0 1 9.4 6"/>
+    <path d="M25.4 20.4A10.4 10.4 0 0 1 16 26.4"/>
+    <path d="M16 26.4a10.4 10.4 0 0 1-9.4-6"/>
+    <path d="M6.6 11.6A10.4 10.4 0 0 1 16 5.6"/>
+  </g>
+
+  <!-- Inner ring, heavier, to hold the shape when the outer arcs blur -->
+  <circle cx="16" cy="16" r="5.2" fill="none" stroke="url(#rt)" stroke-width="3"/>
+
+  <!-- Lock -->
+  <circle cx="16" cy="16" r="1.9" fill="#e9e9ec"/>
 </svg>

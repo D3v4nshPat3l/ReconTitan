@@ -11,11 +11,14 @@ from app.config import settings
 #: Modules that shell out to a binary. Each already fails soft when the binary
 #: is absent, but silence is not the same as a report: an operator needs to
 #: know a module was skipped rather than assume it found nothing.
+#: ``waf_detect`` is deliberately absent: despite the ``run_wafw00f`` name it
+#: never shells out, it matches WAF/CDN signatures from response headers in
+#: pure Python. Listing it here reported a working module as unavailable, which
+#: inverts the whole point of this report.
 BINARY_MODULES: dict[str, tuple[str, ...]] = {
     "port_scan": ("nmap",),
     "subfinder": ("subfinder",),
     "amass": ("amass",),
-    "waf_detect": ("wafw00f",),
     "theharvester": ("theHarvester", "theharvester"),
     "nuclei": ("nuclei",),
     "nikto": ("nikto",),

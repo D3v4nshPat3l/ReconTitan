@@ -111,7 +111,7 @@ def test_capabilities_are_public_and_versioned():
         response = test_client.get("/api/capabilities")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["version"] == "0.4.1"
+    assert payload["version"] == "0.5.0"
     assert {item["key"] for item in payload["capabilities"]} >= {
         "pdf_report", "subdomain_takeover", "js_analysis", "favicon_hash", "tech_stack",
     }

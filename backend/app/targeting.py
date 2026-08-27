@@ -83,6 +83,24 @@ def validate_scan_target(target: str, *, resolve_dns: bool = False) -> tuple[boo
     if not ok:
         return False, host, error
 
+    # Operator blocklist. Checked here rather than in each router because every
+    # scan path already funnels through this function, so a new endpoint cannot
+    # accidentally skip it. Imported lazily: targeting is used by tools that
+    # have no database, and importing the service at module scope would drag
+    # pymongo into them.
+    try:
+        from app.services import blocklist
+
+        entry = blocklist.target_block(host)
+        if entry is not None:
+            reason = str(entry.get("reason", "")).strip()
+            return False, host, (
+                "This target is on the operator blocklist and cannot be scanned"
+                + (f": {reason}" if reason else ".")
+            )
+    except Exception:  # a blocklist outage must not break target validation
+        pass
+
     if resolve_dns and not settings.ALLOW_PRIVATE_TARGETS:
         try:
             addresses = resolve_target_addresses(host)

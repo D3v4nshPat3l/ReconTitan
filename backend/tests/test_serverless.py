@@ -176,15 +176,33 @@ def test_runtime_report_states_the_deployment_shape(monkeypatch):
 def test_capabilities_payload_exposes_the_runtime_block():
     from app.services.capabilities import capabilities_payload
 
-    assert "runtime" in capabilities_payload("0.4.1")
+    assert "runtime" in capabilities_payload("0.5.0")
 
 
 def test_every_binary_module_is_declared():
     """A new shell-out module must be added here or it reports as available."""
     from app.services.capabilities import BINARY_MODULES
 
-    for module in ("port_scan", "subfinder", "amass", "waf_detect", "nuclei", "sqlmap"):
+    for module in ("port_scan", "subfinder", "amass", "nuclei", "sqlmap"):
         assert module in BINARY_MODULES
+
+
+def test_modules_without_a_binary_are_not_declared():
+    """The inverse guard: declaring a pure-Python module reports it as broken.
+
+    ``waf_detect`` was listed here against ``wafw00f`` even though
+    ``run_wafw00f`` only matches response headers and never spawns a process.
+    On any host without that binary the capability report called a fully
+    working module unavailable, which is the opposite of what this report is
+    for.
+    """
+    from app.services.capabilities import BINARY_MODULES
+
+    assert "waf_detect" not in BINARY_MODULES
+
+    source = (REPO_ROOT / "backend/app/tasks/osint/waf_detect.py").read_text(encoding="utf-8")
+    assert "subprocess.run" not in source
+    assert "shutil.which" not in source
 
 
 # ── Deployment manifest ──────────────────────────────────────────────────────
@@ -349,9 +367,13 @@ def test_panel_probing_is_still_blocked_when_admin_is_mounted():
 def test_console_assets_use_relative_paths():
     """One build has to work at the root and under /admin."""
     html = (REPO_ROOT / "frontend/admin.html").read_text(encoding="utf-8")
-    assert 'href="static/admin.css"' in html
-    assert 'src="static/admin.js"' in html
+    # Matched by prefix, not exact string: a cache-busting query is fine, a
+    # leading slash is not. It is the relative-ness that has to hold.
+    assert 'href="static/admin.css' in html
+    assert 'src="static/admin.js' in html
     assert "/admin/static/" not in html
+    assert 'href="/static/' not in html
+    assert 'src="/static/' not in html
 
     js = (REPO_ROOT / "frontend/admin.js").read_text(encoding="utf-8")
     assert "const BASE = window.location.pathname" in js
