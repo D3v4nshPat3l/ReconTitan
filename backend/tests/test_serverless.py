@@ -222,9 +222,25 @@ def test_entry_point_imports_the_app():
     assert "sys.path.insert" in source
 
 
-def test_root_requirements_point_at_the_backend_set():
-    body = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
-    assert "-r backend/requirements.txt" in body
+def _pins(path):
+    """Package pins from a requirements file, ignoring comments and blanks."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return {
+        line.strip() for line in lines
+        if line.strip() and not line.strip().startswith("#")
+    }
+
+
+def test_root_requirements_match_the_backend_set():
+    """Vercel resolves from the repo root, and a relative ``-r`` include is not
+    reliably honoured there -- an unresolved include installs nothing and the
+    function dies on first import. The root file therefore carries the pins
+    itself, which only stays correct while the two files agree.
+    """
+    root = _pins(REPO_ROOT / "requirements.txt")
+    backend = _pins(REPO_ROOT / "backend" / "requirements.txt")
+    assert not backend - root, f"missing from root requirements.txt: {sorted(backend - root)}"
+    assert not root - backend, f"only in root requirements.txt: {sorted(root - backend)}"
 
 
 # ── Doubles ──────────────────────────────────────────────────────────────────

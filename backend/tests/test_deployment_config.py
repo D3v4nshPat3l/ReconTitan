@@ -165,3 +165,40 @@ def test_weak_secrets_block(monkeypatch, capsys):
 
     assert preflight_module.run() == 1
     assert "SECRET_KEY" in capsys.readouterr().out
+
+
+# ── Blank environment variables ─────────────────────────────────────────────
+
+def test_a_blank_integer_var_falls_back_to_the_default(monkeypatch):
+    """Hosting dashboards let a variable exist with an empty value.
+
+    ``os.getenv(name, default)`` only falls back when the name is absent, so a
+    blank one returned "" and int("") raised at import — every request to the
+    deployed function returned 500 before a single line of app code ran.
+    """
+    monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "")
+    assert Settings().MAX_REQUEST_BODY_BYTES == 2 * 1024 * 1024
+
+
+def test_a_whitespace_only_integer_var_also_falls_back(monkeypatch):
+    monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "   ")
+    assert Settings().MAX_REQUEST_BODY_BYTES == 2 * 1024 * 1024
+
+
+def test_a_genuinely_invalid_integer_still_raises(monkeypatch):
+    """Blank means "unset". A typo must still fail loudly rather than silently."""
+    monkeypatch.setenv("MAX_REQUEST_BODY_BYTES", "2mb")
+    with pytest.raises(RuntimeError, match="must be an integer"):
+        Settings()
+
+
+def test_a_blank_boolean_var_keeps_its_default(monkeypatch):
+    """A blank value used to read as False regardless of the declared default,
+    which turns a deliberately-enabled flag off with no error anywhere.
+    """
+    from app.config import _env_bool
+
+    monkeypatch.setenv("SOME_FLAG", "")
+    assert _env_bool("SOME_FLAG", True) is True
+    monkeypatch.setenv("SOME_FLAG", "false")
+    assert _env_bool("SOME_FLAG", True) is False

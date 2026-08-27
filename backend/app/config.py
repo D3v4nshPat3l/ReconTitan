@@ -36,12 +36,25 @@ def _load_env_file() -> None:
 _load_env_file()
 
 
+def _env_raw(name: str, default: str) -> str:
+    """Read an env var, treating a blank value as absent.
+
+    Hosting dashboards let a variable exist with an empty value, and
+    ``os.getenv(name, default)`` only falls back when the name is missing --
+    a blank one returns "" and the default is skipped. That turned an empty
+    MAX_REQUEST_BODY_BYTES into an import-time crash on every request.
+    """
+    raw = os.getenv(name)
+    raw = "" if raw is None else raw.strip()
+    return raw if raw else default
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
-    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+    return _env_raw(name, str(default)).lower() in {"1", "true", "yes", "on"}
 
 
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
-    raw = os.getenv(name, str(default)).strip()
+    raw = _env_raw(name, str(default))
     try:
         value = int(raw)
     except ValueError as exc:
