@@ -192,6 +192,32 @@ def test_a_genuinely_invalid_integer_still_raises(monkeypatch):
         Settings()
 
 
+def test_a_blank_database_name_falls_back(monkeypatch):
+    """An empty MONGO_DB reached pymongo as client[""], which raises
+    "database name cannot be the empty string" on every request. Storage then
+    failed for the whole deployment: scans could not be persisted and the SOC
+    console had nothing to show, with only a warning in the logs.
+    """
+    monkeypatch.setenv("MONGO_DB", "")
+    assert Settings().MONGO_DB == "recontitan"
+
+
+def test_blank_string_settings_keep_their_defaults(monkeypatch):
+    """Same failure mode as the integer case, across every setting whose
+    default is meaningful. Settings that default to "" are excluded on
+    purpose: there, blank and unset genuinely mean the same thing.
+    """
+    for name, expected in (
+        ("MONGO_HOST", "localhost"),
+        ("REDIS_HOST", "localhost"),
+        ("DOMAIN", "localhost"),
+        ("AI_PROVIDER", "auto"),
+        ("API_HOST", "0.0.0.0"),
+    ):
+        monkeypatch.setenv(name, "")
+        assert getattr(Settings(), name) == expected, f"{name} did not fall back"
+
+
 def test_a_blank_boolean_var_keeps_its_default(monkeypatch):
     """A blank value used to read as False regardless of the declared default,
     which turns a deliberately-enabled flag off with no error anywhere.

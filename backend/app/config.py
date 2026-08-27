@@ -36,7 +36,7 @@ def _load_env_file() -> None:
 _load_env_file()
 
 
-def _env_raw(name: str, default: str) -> str:
+def _env_str(name: str, default: str) -> str:
     """Read an env var, treating a blank value as absent.
 
     Hosting dashboards let a variable exist with an empty value, and
@@ -50,11 +50,11 @@ def _env_raw(name: str, default: str) -> str:
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
-    return _env_raw(name, str(default)).lower() in {"1", "true", "yes", "on"}
+    return _env_str(name, str(default)).lower() in {"1", "true", "yes", "on"}
 
 
 def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
-    raw = _env_raw(name, str(default))
+    raw = _env_str(name, str(default))
     try:
         value = int(raw)
     except ValueError as exc:
@@ -111,7 +111,7 @@ class Settings:
     def __init__(self) -> None:
         # Paths
         self.BASE_DIR = Path(__file__).resolve().parent.parent
-        self.FRONTEND_DIR = Path(os.getenv("FRONTEND_PATH", str(self.BASE_DIR.parent / "frontend")))
+        self.FRONTEND_DIR = Path(_env_str("FRONTEND_PATH", str(self.BASE_DIR.parent / "frontend")))
 
         # Application
         self.APP_NAME = "ReconTitan"
@@ -119,8 +119,8 @@ class Settings:
         self.DEBUG = _env_bool("RECONTITAN_DEBUG", True)
 
         # Domain / security
-        self.DOMAIN = os.getenv("DOMAIN", "localhost").strip().lower()
-        self.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+        self.DOMAIN = _env_str("DOMAIN", "localhost").strip().lower()
+        self.SECRET_KEY = _env_str("SECRET_KEY", "dev-secret-change-in-production")
         self.API_ACCESS_KEY = os.getenv("API_ACCESS_KEY", "").strip()
 
         # Named API keys, so a deployment is not limited to one shared secret
@@ -147,7 +147,7 @@ class Settings:
         self.RATE_LIMIT_BLOCK_SECONDS = _env_int("RATE_LIMIT_BLOCK_SECONDS", 300, minimum=1)
 
         # API server / browser access
-        self.API_HOST = os.getenv("API_HOST", "0.0.0.0")
+        self.API_HOST = _env_str("API_HOST", "0.0.0.0")
         self.API_PORT = _env_int("API_PORT", 8000, minimum=1)
         self.CORS_ORIGINS = _origins_from_env()
         self.CORS_ALLOW_CREDENTIALS = (
@@ -163,18 +163,18 @@ class Settings:
         self.TRUSTED_HOSTS = sorted(set(trusted_hosts))
 
         # Redis
-        self.REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+        self.REDIS_HOST = _env_str("REDIS_HOST", "localhost")
         self.REDIS_PORT = _env_int("REDIS_PORT", 6379, minimum=1)
         self.REDIS_DB = _env_int("REDIS_DB", 0, minimum=0)
         self.REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 
         # MongoDB
-        self.MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
+        self.MONGO_HOST = _env_str("MONGO_HOST", "localhost")
         self.MONGO_PORT = _env_int("MONGO_PORT", 27017, minimum=1)
-        self.MONGO_DB = os.getenv("MONGO_DB", "recontitan")
+        self.MONGO_DB = _env_str("MONGO_DB", "recontitan")
         self.MONGO_USER = os.getenv("MONGO_USER", "")
         self.MONGO_PASS = os.getenv("MONGO_PASS", "")
-        self.MONGO_AUTH_SOURCE = os.getenv("MONGO_AUTH_SOURCE", self.MONGO_DB)
+        self.MONGO_AUTH_SOURCE = _env_str("MONGO_AUTH_SOURCE", self.MONGO_DB)
 
         # AI narration layer.
         # The scanners themselves stay pure Python — the model never decides
@@ -184,12 +184,12 @@ class Settings:
         #   ollama — local Ollama only
         #   openai — hosted OpenAI only
         #   none   — disable AI entirely, always use the built-in fallbacks
-        self.AI_PROVIDER = os.getenv("AI_PROVIDER", "auto").strip().lower()
+        self.AI_PROVIDER = _env_str("AI_PROVIDER", "auto").strip().lower()
         if self.AI_PROVIDER not in {"auto", "ollama", "openai", "none"}:
             raise RuntimeError("AI_PROVIDER must be one of: auto, ollama, openai, none")
 
         # Ollama (local, no API key, no data leaves the host)
-        self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip().rstrip("/")
+        self.OLLAMA_BASE_URL = _env_str("OLLAMA_BASE_URL", "http://localhost:11434").strip().rstrip("/")
         # Blank means "use whatever is installed" — the module resolves the
         # first model from /api/tags, so a fresh clone works against any pull.
         self.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "").strip()
@@ -197,7 +197,7 @@ class Settings:
         # on CPU is slower still. Kept separate from the HTTP scanner timeouts.
         self.OLLAMA_TIMEOUT = _env_int("OLLAMA_TIMEOUT", 120, minimum=5)
         self.OLLAMA_NUM_CTX = _env_int("OLLAMA_NUM_CTX", 4096, minimum=512)
-        self.OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "5m").strip()
+        self.OLLAMA_KEEP_ALIVE = _env_str("OLLAMA_KEEP_ALIVE", "5m").strip()
 
         # Inline narration budget. Each explanation is one model round-trip, and
         # a local CPU model can take several seconds each, so the synchronous
@@ -209,7 +209,7 @@ class Settings:
 
         # OpenAI (optional hosted fallback)
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-        self.OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.OPENAI_MODEL = _env_str("OPENAI_MODEL", "gpt-4o-mini")
 
         # Keyless third-party lookups that receive the target address.
         #
