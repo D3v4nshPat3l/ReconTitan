@@ -213,7 +213,32 @@ def test_vercel_manifest_is_valid_json_and_routes_to_the_app():
     manifest = json.loads((REPO_ROOT / "vercel.json").read_text(encoding="utf-8"))
     assert "api/index.py" in manifest["functions"]
     assert manifest["functions"]["api/index.py"]["maxDuration"] >= 60
-    assert any(r["destination"] == "/api/index" for r in manifest["rewrites"])
+
+
+def test_the_manifest_does_not_rewrite_into_the_api_namespace():
+    """A rewrite to /api/index hands the function that path, not the requested
+    one, so every request arrives looking like an API call: the homepage and
+    even /api/health answered 401 because the API-key gate fires on anything
+    under /api/. Vercel detects this as a backend framework project and routes
+    to the ASGI app directly, so no rewrite is needed to reach it.
+    """
+    import json
+
+    manifest = json.loads((REPO_ROOT / "vercel.json").read_text(encoding="utf-8"))
+    destinations = [r.get("destination", "") for r in manifest.get("rewrites", [])]
+    assert not any(d.startswith("/api/") for d in destinations), (
+        f"rewriting to {destinations} discards the request path"
+    )
+
+
+def test_the_hobby_function_ceiling_is_respected():
+    """Above 60s Vercel rejects vercel.json during validation, before the build
+    even starts -- the deployment fails in two seconds with no build output.
+    """
+    import json
+
+    manifest = json.loads((REPO_ROOT / "vercel.json").read_text(encoding="utf-8"))
+    assert manifest["functions"]["api/index.py"]["maxDuration"] <= 60
 
 
 def test_entry_point_imports_the_app():
