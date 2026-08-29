@@ -8,8 +8,9 @@ logger = logging.getLogger("recontitan.recon.dns")
 
 RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA"]
 
-# A resolver that has not answered in this long is not going to.
-DNS_LIFETIME = 4
+# Queries run concurrently, so the whole step costs one lifetime rather than
+# seven. That buys back the full patient timeout at no cost in wall clock.
+DNS_LIFETIME = 8
 
 def run_dns_lookup(target: str) -> list[dict]:
     """

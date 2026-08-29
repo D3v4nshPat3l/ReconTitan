@@ -3,11 +3,15 @@ import requests
 import logging
 from urllib.parse import quote
 
+from app.config import settings
+
 logger = logging.getLogger("recontitan.recon.wayback")
 
-# web.archive.org is frequently unreachable, and a 15s connect timeout
-# spent a quarter of the serverless request budget waiting to find out.
-TIMEOUT = 5
+# web.archive.org is frequently slow or unreachable. Waiting is worth it when
+# the scan has time -- the archive is the only source for historical URLs --
+# but inside a serverless request a 15s connect timeout is a quarter of the
+# whole budget spent finding out the host is down.
+TIMEOUT = 5 if settings.SERVERLESS else 15
 
 def run_wayback(target: str) -> list[dict]:
     """
