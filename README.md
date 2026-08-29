@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="docs/assets/hero.svg" alt="ReconTitan" width="100%">
+<img src="docs/screenshots/home.png" alt="ReconTitan" width="100%">
 
-<br>
+<br><br>
 
-**A security-hardened platform for external reconnaissance, OSINT, web analysis, and bounded penetration-test simulation — with confirmed exploitation and professional PDF reporting.**
+# ReconTitan
 
-<br>
+**Point it at a domain. Get back everything that domain shows the internet — enumerated, checked against known weaknesses, and written up with the evidence behind every claim.**
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.139-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -14,1306 +14,686 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-7.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
-[![Tests](https://img.shields.io/badge/tests-121%20passing-65A30D?style=flat-square)](#-testing)
-[![Modules](https://img.shields.io/badge/modules-50-A3E635?style=flat-square)](#-scan-profiles)
-[![OWASP](https://img.shields.io/badge/OWASP-Top%2010%202021-22D3EE?style=flat-square)](#-owasp-top-10-coverage)
-[![Version](https://img.shields.io/badge/version-0.4.1-475569?style=flat-square)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-475569?style=flat-square)](LICENSE)
-
-<br>
-
-[**Quick Start**](#-quick-start) · [**Deployment**](docs/DEPLOYMENT.md) · [**Ollama Setup**](docs/OLLAMA_SETUP.md) · [**Features**](#-features) · [**Screenshots**](#-screenshots) · [**Danger Mode**](#-danger-mode) · [**API**](#-api-reference) · [**Docs**](docs/DANGER_MODE.md)
+[![Tests](https://img.shields.io/badge/tests-551%20passing-65A30D?style=flat-square)](#testing)
+[![Scan modules](https://img.shields.io/badge/scan%20modules-45-A3E635?style=flat-square)](#what-it-actually-runs)
+[![OWASP](https://img.shields.io/badge/OWASP-Top%2010%202021-22D3EE?style=flat-square)](#owasp-top-10-coverage)
+[![Version](https://img.shields.io/badge/version-0.5.0-475569?style=flat-square)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
-
----
-
-> [!WARNING]
-> **Authorized testing only.** ReconTitan sends real traffic to the targets you give it. Scan only systems you own or hold **explicit written permission** to assess. Unauthorized scanning is unlawful in most jurisdictions. You — the operator — are responsible for every scan you start. See [SECURITY.md](SECURITY.md).
 
 ---
 
 ## Table of contents
 
-<table>
-<tr>
-<td valign="top" width="33%">
-
-**Getting started**
-- [What it is](#-what-it-is)
-- [Quick start](#-quick-start)
-- [Installation](#-installation)
-- [First scan](#-your-first-scan)
-
-</td>
-<td valign="top" width="33%">
-
-**Using it**
-- [Scan profiles](#-scan-profiles)
-- [Features](#-features)
-- [Screenshots](#-screenshots)
-- [Danger Mode](#-danger-mode)
-- [Reports](#-reports)
-
-</td>
-<td valign="top" width="33%">
-
-**Reference**
-- [API reference](#-api-reference)
-- [Architecture](#-architecture)
-- [Configuration](#-configuration)
-- [Testing](#-testing)
-- [Troubleshooting](#-troubleshooting)
-
-</td>
-</tr>
-</table>
+- [What this is](#what-this-is)
+- [See it working](#see-it-working)
+- [How it works](#how-it-works)
+- [Scan profiles — and how long each really takes](#scan-profiles--and-how-long-each-really-takes)
+- [What it actually runs](#what-it-actually-runs)
+- [Quick start — 5 minutes, no Docker](#quick-start--5-minutes-no-docker)
+- [Full setup with Docker Compose](#full-setup-with-docker-compose)
+- [Configuration](#configuration)
+- [Danger Mode](#danger-mode)
+- [The SOC console](#the-soc-console)
+- [Troubleshooting](#troubleshooting)
+- [Testing](#testing)
+- [Legal and ethical use](#legal-and-ethical-use)
+- [License](#license)
 
 ---
 
-## ◈ What it is
+## What this is
 
-ReconTitan takes **one target** and returns a complete, evidence-backed picture of its external attack surface — then, if you explicitly opt in, it goes further and *proves* which weaknesses are real.
+Most "security scanners" hand you a wall of raw tool output and leave the interpretation to you. ReconTitan is built the other way round: **every finding carries the evidence that produced it**, and the report is designed to be read by a person, not grepped.
 
-<table>
-<tr><td width="50%" valign="top">
+Give it a domain and it will:
 
-### It maps
-Domains, DNS records, certificates, historical URLs, subdomains, live hosts, open ports, technologies, JavaScript assets, and every input point an attacker could reach.
+1. **Map the attack surface** — WHOIS, DNS records, certificate transparency logs, archived URLs, subdomains, live hosts, open ports, IP and hosting attribution.
+2. **Analyse what it found** — TLS configuration, security headers, cookie flags, CORS policy, technology fingerprints, JavaScript inventory, WAF/CDN detection, subdomain-takeover exposure.
+3. **Match against known weaknesses** — CVE candidates from the NVD, OWASP Top 10 categorisation, misconfiguration checks.
+4. **Optionally simulate an attacker** — Danger Mode sends bounded, paced, explicitly-authorised probes: injection families, path traversal, IDOR, business-logic, data-exposure and DOM analysis.
+5. **Write it up** — an interactive report, a plain-English summary, and an exportable PDF/JSON/HTML.
 
-</td><td width="50%" valign="top">
+Everything is **candidate-graded**. The tool never claims a confirmed exploit; it tells you what it saw and what would confirm it. That distinction is enforced in the code, not just the wording.
 
-### It assesses
-Security headers, TLS configuration, CORS policy, cookie flags, WAF presence, subdomain takeover risk, CVE candidates, and threat-intelligence reputation.
+---
 
-</td></tr>
-<tr><td width="50%" valign="top">
+## See it working
 
-### It proves
-Boolean-differential SQL injection, shell-arithmetic command injection, template evaluation, and reflection-context XSS — each with a **captured proof value**, not a guess.
+### The report — a real `full` scan of `example.com`
 
-</td><td width="50%" valign="top">
+This is not a mockup. It is the actual report from `example.com`: **25 modules, 32 findings, 80 seconds.**
 
-### It reports
-An interactive masonry dashboard, a severity-ranked PDF with an OWASP coverage matrix, and **full code-level remediation** for every single finding.
+<div align="center">
+<img src="docs/screenshots/report-full-example-com.png" alt="ReconTitan full scan report for example.com showing 32 findings across 25 modules" width="100%">
+</div>
 
-</td></tr>
-</table>
+Every card is a module. The severity band at the top is computed, not decorative. The AI summary at the top is written from the findings themselves — it cannot invent counts, because the numbers are injected rather than generated.
 
-### Why it is different
+Notice what an honest scanner looks like: **Open Ports** says `Binary not installed` and names its fallback. **Subdomains** reports `0` rather than padding the number. **Wayback** shows what it actually retrieved. A tool that never says "I couldn't check this" is a tool you cannot trust.
 
-| Most scanners | ReconTitan |
+### The SOC console
+
+A separate, hardened application that shows who is using your deployment — every scan, every source address, every blocked attack, in IST.
+
+<div align="center">
+<img src="docs/screenshots/soc-console.png" alt="ReconTitan SOC console showing threat events, traffic volume, attack classes and top hostile sources" width="100%">
+</div>
+
+Threat events, injections blocked, auth failures, rate-limited requests, failed console logins, hostile-vs-normal traffic by hour, and a ranked list of the noisiest sources with their attack classes.
+
+<div align="center">
+<img src="docs/screenshots/soc-lock.png" alt="SOC console authentication screen" width="70%">
+</div>
+
+The console is a **separate ASGI application** from the public API. The public app has no admin routes at all, so no public-routing bug can expose it. It binds to loopback and expects to be reached over an SSH tunnel.
+
+---
+
+## How it works
+
+```
+                 ┌──────────────────────────────────────────────┐
+   Browser ─────▶│  FastAPI  (app.main)                         │
+                 │  ├─ SecurityMiddleware   rate limit,         │
+                 │  │                       injection guard,    │
+                 │  │                       header hygiene      │
+                 │  ├─ TrustedHost          host-header checks  │
+                 │  ├─ CORS                 explicit origins    │
+                 │  └─ StaticFiles          serves the frontend │
+                 └───────────────┬──────────────────────────────┘
+                                 │
+              ┌──────────────────┴───────────────────┐
+              │                                      │
+   ┌──────────▼───────────┐            ┌─────────────▼──────────────┐
+   │ GET /api/test-scan   │            │ POST /api/scan             │
+   │ synchronous          │            │ queued via Celery          │
+   │ no Celery, no Mongo  │            │ needs Redis + a worker     │
+   │ ← the browser uses   │            │ ← for long/batch jobs      │
+   │   this one           │            │                            │
+   └──────────┬───────────┘            └─────────────┬──────────────┘
+              │                                      │
+              └──────────────┬───────────────────────┘
+                             ▼
+              ┌──────────────────────────────┐
+              │  Scan pipeline               │
+              │  recon → osint → vuln        │
+              │  → danger (if authorised)    │
+              └──────────────┬───────────────┘
+                             ▼
+        ┌────────────────────┴─────────────────────┐
+        ▼                    ▼                     ▼
+   MongoDB              Redis                 AI provider
+   scan history         rate limits           Ollama / OpenAI / none
+   audit trail          shared state          summaries + explanations
+   (optional)           (optional)            (optional)
+```
+
+**The parts that matter technically:**
+
+**Every outbound request goes through one client.** `app.tasks.http_client.safe_request` enforces SSRF protection, response-size ceilings, timeouts and redirect limits. Modules never call `requests` directly. That is why pointing a scan at `localhost` is refused — the guard sees it before a packet leaves.
+
+**Danger Mode traffic is budgeted, not just rate-limited.** `DangerBudget` enforces two independent ceilings — a request/payload count *and* a wall-clock deadline — and paces every probe, backing off automatically when the target returns 429 or 503. A single probe's timeout is clamped to the remaining budget, so one dead endpoint cannot overrun the whole scan.
+
+**Findings never carry response bodies.** Danger Mode stores a SHA-256 fingerprint of a response instead of its content, so an analyst can tell two responses apart without the tool ever retaining secrets, session material or personal data it stumbled across.
+
+**Storage is fail-soft on purpose.** If MongoDB is unreachable, scans still run and still report; you lose history and the console, not the tool. The trade-off is that silent degradation needs a deliberate check, which is what `python -m app.preflight` is for.
+
+**Three optional dependencies, three graceful degradations.** No MongoDB → no history. No Redis → rate limits become per-process. No AI provider → summaries fall back to a deterministic template. None of the three stops a scan.
+
+---
+
+## Scan profiles — and how long each really takes
+
+These are **measured numbers** from cold runs against `example.com` on a home connection, not estimates. The spread is real: certificate-transparency logs and the Wayback Machine are third-party services whose response times vary a lot from one run to the next.
+
+| Profile | Modules | Typical time | What you get |
+|---|---|---|---|
+| **Recon Only** | 8 | **20–55 s** | WHOIS, DNS, certificate transparency, archived URLs, live-host probing, IP attribution, subdomain enumeration |
+| **OSINT & Web** | 15 | **10–25 s** | TLS, security headers, cookies, CORS, tech stack, JS inventory, WAF/CDN, takeover exposure, threat-intel lookups |
+| **Vulnerability** | 2 | **5–15 s** | Port exposure and NVD CVE candidate matching |
+| **Full Scan** | 25 | **60–120 s** | Everything above, in one report |
+| **Danger Mode** | 25 + 20 stages | **3–6 minutes** | Everything above **plus** bounded active penetration-test simulation |
+
+### Read this before you get impatient
+
+**Full Scan and Danger Mode take time, and that is the tool working correctly, not hanging.**
+
+A Full Scan makes real network requests to certificate-transparency logs, the Wayback Machine, DNS resolvers, the NVD, and the target itself. Several of those are public services that are sometimes slow. The scanner waits, because a 15-second wait that returns archived URLs is worth more than an instant result that returns nothing.
+
+Danger Mode is slower still, deliberately. It **paces** its traffic — there is a configurable delay between probes and an automatic backoff when the target signals throttling. A danger scan that finished in 20 seconds would be a scan that hammered the target, and that is exactly the behaviour that gets a scanner blocked or a tester in trouble.
+
+**What you get for the wait is the whole point:** 32 findings on a domain as minimal as `example.com`, each with its own evidence block, severity, OWASP category and remediation. On a real application the difference between profiles is dramatic.
+
+**Watch the live log while it runs.** Every stage announces itself with a timestamp, so you can always see what it is doing:
+
+```
+[15:42:31] → WHOIS and DNS reconnaissance
+[15:42:39] → Certificate Transparency discovery
+[15:42:53] → Wayback history
+[15:42:54] → Infrastructure and HTTP probing
+[15:42:55] → Technology stack detection
+```
+
+If a stage takes 15 seconds, it is waiting on someone else's server. Let it finish.
+
+---
+
+## What it actually runs
+
+<details>
+<summary><b>Recon — 8 modules</b></summary>
+
+`whois` · `dns_lookup` (A, AAAA, MX, NS, TXT, CNAME, SOA, plus SPF/DMARC analysis, all queried concurrently) · `crt.sh` certificate transparency · `wayback` archived URLs · `ipinfo` geolocation and ASN · `httpx_probe` live-host detection · `subfinder` · `amass`
+
+</details>
+
+<details>
+<summary><b>OSINT & Web — 15 modules</b></summary>
+
+`tech_stack` · `favicon_hash` correlation · `js_analysis` · `subdomain_takeover` · `security_headers` · `ssl_check` (issuer, validity, protocol, cipher suite) · `robots_sitemap` · `cors_check` · `cookie_check` · `waf_detect` · `virustotal` · `shodan` · `greynoise` · `censys` · `theharvester`
+
+Threat-intel modules skip silently when no API key is configured — they cost nothing and are simply absent from the report.
+
+</details>
+
+<details>
+<summary><b>Vulnerability — 2 modules (plus 4 optional)</b></summary>
+
+`port_scan` (nmap when installed, HackerTarget API as fallback) · `nvd_cve` version-matched CVE candidates
+
+With `ENABLE_ACTIVE_VULN_TOOLS=true` and the binaries present: `nuclei` · `nikto` · `dir_fuzzing` · `sqlmap`
+
+</details>
+
+<details>
+<summary><b>Danger Mode — 20 stages</b></summary>
+
+`danger_recon` · `danger_axfr` zone-transfer attempts · `attack_surface` · seven injection families (`sqli`, `command`, `html`, `xss`, `ssti`, `xxe`, `ssrf`, `nosql`) · `reverse_shell_assessment` · `dom_injection` · `directory_fuzzing` · `path_traversal` · `idor_testing` · `business_logic` · `data_exposure` · `advanced_checks` · `owasp_matrix`
+
+</details>
+
+### OWASP Top 10 coverage
+
+| Category | Covered by |
 |---|---|
-| Flag a *possible* SQL injection | Runs a boolean differential, then reads back the **database version banner** as proof |
-| Report "reflected input" as XSS | Analyses the **reflection context** and reports whether breakout characters actually survived |
-| Say "use parameterized queries" | Ships the **vulnerable and fixed code** in Python, PHP, Node, Java, C#, and Go — plus a `VERIFY` step |
-| Dump found data into the report | **Quantifies** exposure (record counts, field names, PII classes) and fingerprints the values instead |
-| Run intrusive tools by default | Fails closed: intrusive testing is **double-gated** and off unless you deliberately enable it |
+| A01 Broken Access Control | IDOR testing, path traversal, business logic |
+| A02 Cryptographic Failures | TLS analysis, cookie flags, cryptographic checks |
+| A03 Injection | Seven injection families, DOM analysis |
+| A04 Insecure Design | Business-logic probes, rate-limit observation |
+| A05 Security Misconfiguration | Headers, CORS, directory exposure, misconfiguration checks |
+| A06 Vulnerable Components | Tech-stack fingerprinting into NVD CVE matching |
+| A07 Auth Failures | Credential-handling assessment, session-flag checks |
+| A08 Integrity Failures | JavaScript inventory, subresource analysis |
+| A09 Logging Failures | Logging/monitoring inference from response behaviour |
+| A10 SSRF | Dedicated SSRF probe family |
 
 ---
 
-## ⚡ Quick start
+## Quick start — 5 minutes, no Docker
 
-The fastest path — no Docker, no database, no Redis:
+**This is the fastest path and it needs nothing but Python.** MongoDB, Redis and Docker are all optional — the browser calls a synchronous scan endpoint that runs without any of them. You get full scanning immediately; you just don't get saved history or the SOC console until you add MongoDB.
+
+### Step 1 — Get the code
 
 ```bash
 git clone https://github.com/D3v4nshPat3l/ReconTitan.git
 cd ReconTitan
-python -m venv .venv && .venv\Scripts\activate
-pip install -r backend/requirements.txt
-python -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
-Open **<http://127.0.0.1:8000>**, type `example.com`, pick a profile, and hit **START SCAN**.
+### Step 2 — Create a virtual environment
 
-> The synchronous `/api/test-scan` path needs neither MongoDB nor Celery. Add them only when you want queued scans and stored history.
-
----
-
-## ⬗ Installation
+**A virtual environment is not optional here.** Anaconda and some system Pythons ship a patched `pyOpenSSL` that breaks the `cryptography` library this project uses. A clean venv avoids an hour of confusing errors. (See [Troubleshooting](#troubleshooting) if you have already hit it.)
 
 <details open>
-<summary><b>Windows — step by step</b></summary>
-
-<br>
-
-**1. Install Python 3.11 or newer**
-
-Download from [python.org](https://www.python.org/downloads/). On the first installer screen, tick **"Add python.exe to PATH"**. Verify:
+<summary><b>Linux / macOS</b></summary>
 
 ```bash
-python --version
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-**2. Get the code**
+</details>
 
-```bash
-git clone https://github.com/D3v4nshPat3l/ReconTitan.git
-cd ReconTitan
+<details>
+<summary><b>Windows — PowerShell</b></summary>
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-Or download the ZIP from GitHub and extract it, then `cd` into the folder.
+If PowerShell refuses with *"running scripts is disabled on this system"*, allow it for this window only:
 
-**3. Create a virtual environment**
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+</details>
+
+<details>
+<summary><b>Windows — Git Bash</b></summary>
 
 ```bash
 python -m venv .venv
-```
-
-Activation differs by shell. Pick the one you are actually using — the wrong one fails with `command not found`.
-
-**PowerShell or Command Prompt:**
-
-```bash
-.venv\Scripts\activate
-```
-
-**Git Bash / MINGW64:**
-
-```bash
 source .venv/Scripts/activate
 ```
 
-Git Bash is a POSIX shell, so it needs forward slashes and `source`. Using the PowerShell form there collapses the backslashes and produces `bash: .venvScriptsactivate: command not found`. Note it is still `.venv/Scripts/` on Windows even in Git Bash — not `.venv/bin/`, which is the Linux and macOS layout.
+</details>
 
-Your prompt should now start with `(.venv)`. Confirm the right interpreter is active:
+You will know it worked when your prompt shows `(.venv)`.
 
-```bash
-python -c "import sys; print(sys.prefix)"
-```
-
-If PowerShell blocks the activation script, run PowerShell as Administrator once:
-
-```bash
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-**4. Install dependencies**
-
-```bash
-python -m pip install --upgrade pip
-```
+### Step 3 — Install dependencies
 
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-**5. Create your environment file**
+Around 16 packages, roughly 30 seconds.
 
-`.env` is gitignored, so a fresh clone never contains one and every setting falls back to its built-in default — including `ALLOW_DANGER_MODE=false`. That is why Danger Mode is rejected on a new clone until you do this step.
+### Step 4 — Create your configuration
 
-**PowerShell or Command Prompt:**
-
-```bash
-copy .env.example .env
-```
-
-**Git Bash / MINGW64, Linux, macOS:**
+<details open>
+<summary><b>Linux / macOS / Git Bash</b></summary>
 
 ```bash
 cp .env.example .env
 ```
 
-Verify it landed and check the setting:
-
-```bash
-grep ALLOW_DANGER_MODE .env
-```
-
-**6. Start it**
-
-```bash
-python -m uvicorn app.main:app --app-dir backend --port 8000
-```
-
-Then open <http://127.0.0.1:8000>.
-
 </details>
 
 <details>
-<summary><b>Linux / macOS</b></summary>
+<summary><b>Windows — PowerShell</b></summary>
 
-<br>
-
-```bash
-git clone https://github.com/D3v4nshPat3l/ReconTitan.git
-cd ReconTitan
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-cp .env.example .env
-python -m uvicorn app.main:app --app-dir backend --port 8000
+```powershell
+Copy-Item .env.example .env
 ```
 
 </details>
 
-<details>
-<summary><b>Vercel — reduced serverless deployment</b></summary>
+The defaults are set for local development and work as-is. Danger Mode is already enabled in `.env.example`.
 
-<br>
-
-Vercel runs no long-lived processes and no system packages, so this is a
-working but **reduced** configuration: 25 of 30 modules run (including every
-Danger Mode stage), while `port_scan`, `subfinder`, `amass`, `waf_detect` and
-`theharvester` are skipped, background scans are refused, and the admin console
-loses its loopback isolation.
-
-It needs MongoDB Atlas and Upstash Redis, both free tier. Redis is mandatory
-rather than optional: rate limits and admin lockout otherwise live in each
-instance's memory, so the ceilings multiply by instance count and lockout can
-be sidestepped — silently, with nothing logged.
-
-Full walkthrough: **[docs/VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md)**
-
-</details>
-
-<details>
-<summary><b>Docker Compose — full stack with workers, queue, and database</b></summary>
-
-<br>
-
-This brings up Nginx, the API, a Celery worker, Redis, and MongoDB.
-
-**1. Create and fill `.env`**
+### Step 5 — Run it
 
 ```bash
-cp .env.example .env
+cd backend
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Generate strong secrets:
+Open **<http://127.0.0.1:8000>**, enter a domain you own, choose a profile, and scan.
+
+### Step 6 — Confirm it works from the command line
 
 ```bash
-python -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48)); print('API_ACCESS_KEY=' + secrets.token_urlsafe(48))"
+curl "http://127.0.0.1:8000/api/health"
 ```
 
-Set at minimum: `DOMAIN`, `SECRET_KEY`, `API_ACCESS_KEY`, `CORS_ORIGINS`, `REDIS_PASSWORD`, `MONGO_ROOT_USER`, `MONGO_ROOT_PASS`, `MONGO_USER`, `MONGO_PASS`.
+Expected: `{"status":"healthy","app":"ReconTitan","version":"0.5.0"}`
 
-**2. Provide TLS certificates**
-
-Place `fullchain.pem` and `privkey.pem` in `nginx/certs/`, or use Let's Encrypt via the mounted `/etc/letsencrypt`.
-
-**3. Launch**
+Run a real scan without touching the browser:
 
 ```bash
-docker compose up -d --build
+curl "http://127.0.0.1:8000/api/test-scan?target=example.com&scan_type=recon_only"
 ```
+
+---
+
+## Full setup with Docker Compose
+
+Use this when you want **saved scan history, the SOC console, Celery workers, and no wall-clock limit on Danger Mode.** This is the deployment the project was designed around.
+
+### Prerequisites
+
+- Docker Engine 24+ and the Compose plugin (`docker compose version`)
+- 2 GB RAM free
+
+### Step 1 — Generate real secrets
+
+Never reuse the placeholders. Generate four distinct values:
+
+```bash
+python -c "import secrets; [print(secrets.token_urlsafe(48)) for _ in range(4)]"
+```
+
+### Step 2 — Fill in `.env`
+
+Compose refuses to start if any of these are missing — that is deliberate, so you cannot accidentally deploy with blanks:
+
+```ini
+DOMAIN=localhost
+CORS_ORIGINS=http://localhost:8000
+SECRET_KEY=<first generated value>
+API_ACCESS_KEY=<second generated value>
+MONGO_USER=recontitan
+MONGO_PASS=<third generated value>
+REDIS_PASSWORD=<fourth generated value>
+ADMIN_ENABLED=true
+ADMIN_TOKEN=<generate a fifth value>
+ALLOW_DANGER_MODE=true
+```
+
+> **Leave no variable blank.** A variable that *exists with an empty value* is not the same as one that is absent — the empty string wins over the default. The code now treats blank as unset for every setting, but an empty value in your `.env` is still a mistake waiting to confuse you.
+
+### Step 3 — Start the stack
+
+```bash
+docker compose up -d
+```
+
+Brings up nginx, Redis, MongoDB, the API, a Celery worker, and the admin console.
+
+### Step 4 — Check everything came up
 
 ```bash
 docker compose ps
 ```
 
-**4. Check health**
-
 ```bash
-curl -k https://localhost/api/health
+docker compose logs -f api
 ```
 
-Every container runs non-root, read-only, with `no-new-privileges` and all capabilities dropped.
+### Step 5 — Pre-flight your configuration
 
-</details>
+```bash
+docker compose exec api python -m app.preflight
+```
 
-<details>
-<summary><b>Optional external tools</b></summary>
+This audits secrets, storage reachability, client-IP attribution, admin exposure and scanning behaviour, and **exits non-zero if anything is genuinely unsafe**. It reports the failures that would otherwise be silent — a missing NVD key making rate-limited 403s look like "no CVEs found", or a missing Redis making a limit of 5 quietly become 5 × instance count.
 
-<br>
+### Step 6 — Open the SOC console
 
-ReconTitan works fully without these; each one fails soft and is skipped when absent.
+The console is not routed publicly. Reach it over an SSH tunnel:
 
-| Tool | Adds | Install |
+```bash
+ssh -N -L 9000:127.0.0.1:9000 user@your-server
+```
+
+Then open <http://127.0.0.1:9000> and paste your `ADMIN_TOKEN`.
+
+Running locally without Docker? Start it directly:
+
+```bash
+python run_admin.py
+```
+
+---
+
+## Configuration
+
+Everything is environment variables; `.env.example` is the annotated reference. The settings you are most likely to touch:
+
+### Core
+
+| Variable | Default | What it does |
 |---|---|---|
-| `nmap` | Deeper port and service detection | [nmap.org](https://nmap.org/download.html) |
-| `subfinder` | Extra passive subdomain sources | `go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest` |
-| `amass` | Extra passive enumeration | [OWASP Amass](https://github.com/owasp-amass/amass) |
-| `nuclei` | Template-based checks (**opt-in**) | `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` |
+| `RECONTITAN_DEBUG` | `true` | `false` in production — disables `/api/docs` and strips error detail |
+| `DOMAIN` | `localhost` | Hostname for host-header validation. No scheme, no trailing slash |
+| `CORS_ORIGINS` | `http://localhost:8000` | Browser origins — **with** scheme |
+| `SECRET_KEY` | *(empty)* | 32+ random characters. Required in production |
+| `API_ACCESS_KEY` | *(empty)* | Set this and every `/api/` route needs an `X-ReconTitan-Key` header |
 
-The last group only runs with `ENABLE_ACTIVE_VULN_TOOLS=true`.
+> **`DOMAIN` and `CORS_ORIGINS` look inconsistent on purpose.** `DOMAIN` is a hostname used for Host-header matching. `CORS_ORIGINS` is a browser origin and must carry `https://`. It is not a typo.
 
-</details>
+### Multi-user API keys
 
----
+Instead of one shared secret, issue named keys so the audit trail records *who* ran each scan and you can revoke one without cutting off everyone:
 
-## ▶ Your first scan
-
-<table>
-<tr><td width="55%" valign="top">
-
-**In the browser**
-
-1. Open <http://127.0.0.1:8000>
-2. Enter a target you are authorized to scan
-3. Choose a profile card
-4. Press **START SCAN**
-5. Watch live module telemetry
-6. The interactive report opens automatically
-7. Export **PDF**, **JSON**, or **HTML**
-
-</td><td width="45%" valign="top">
-
-**From the command line**
-
-```bash
-curl "http://127.0.0.1:8000/api/test-scan?target=example.com&scan_type=full"
+```ini
+API_ACCESS_KEYS=alice:<key>,bob:<key>,ci:<key>
 ```
 
-```bash
-curl "http://127.0.0.1:8000/api/capabilities"
-```
+### Scan behaviour
 
-</td></tr>
-</table>
-
----
-
-## ◆ Scan profiles
-
-<div align="center">
-<img src="docs/assets/profiles.svg" alt="ReconTitan scan profiles" width="100%">
-</div>
-
-| Profile | Key | Modules | Covers | Real run vs `example.com` |
-|---|---|:---:|---|---|
-| **Recon Only** | `recon_only` | 9 | WHOIS, DNS, crt.sh, Wayback, IP intel, HTTP probe, passive subdomains | 45 s · 9 findings |
-| **OSINT & Web** | `osint_only` | 16 | Headers, TLS, CORS, cookies, WAF, robots, tech stack, favicon, JS analysis, takeover, threat intel | 16 s · 17 findings |
-| **Vulnerability** | `vuln_only` | 7 | Port exposure, NVD CVE candidates, version fingerprints | 3 s · 11 findings |
-| **Full Safe Scan** | `full` | 30 | Everything above plus AI summary | 84 s · 35 findings |
-| **Danger Mode** ☣ | `danger` | 50 | Everything above **plus** OWASP Top 10 testing, DOM analysis, business logic, data exposure, and confirmed exploitation | 253 s · 56 findings · 20 stages · 130 requests |
-
-> Every figure above is from an actual scan on a home connection, not an estimate. `GET /api/capabilities` returns this metadata as JSON for integrations.
-
----
-
-## ✦ Features
-
-<details open>
-<summary><b>Reconnaissance & OSINT</b></summary>
-
-<br>
-
-| Module | What it does |
-|---|---|
-| **WHOIS** | Registrar, dates, nameservers, expiry warnings, privacy detection |
-| **DNS** | A, AAAA, MX, TXT, NS, SOA, CNAME, SRV plus SPF and DMARC posture |
-| **crt.sh** | Certificate-transparency subdomain discovery with sensitive-name flagging |
-| **Wayback** | Historical URLs and interesting archived paths |
-| **IP intelligence** | Geolocation, ASN, organization, reverse-IP neighbours |
-| **HTTP probe** | Status, title, server, redirect chain, technology hints |
-| **Subfinder / Amass** | Additional passive enumeration when installed |
-| **Subdomain takeover** | Conservative CNAME + provider fingerprint + NXDOMAIN correlation |
-
-</details>
-
-<details open>
-<summary><b>Web & client-side analysis</b></summary>
-
-<br>
-
-| Module | What it does |
-|---|---|
-| **Security headers** | HSTS, CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy |
-| **TLS/SSL** | Certificate chain, expiry, protocol, cipher, obsolete-version acceptance |
-| **CORS** | Origin reflection, wildcard, credential exposure |
-| **Cookies** | HttpOnly, Secure, SameSite on every issued cookie |
-| **WAF detection** | Fingerprints common WAF and CDN products |
-| **Technology stack** | 27 signatures across headers, HTML, cookies, and asset paths |
-| **JavaScript analysis** | Bounded same-scope inspection for redacted secrets, risky sinks, source maps, endpoints |
-| **Favicon hash** | MD5, SHA-256, and Shodan-compatible MurmurHash3 for asset correlation |
-
-</details>
-
-<details open>
-<summary><b>Vulnerability & intelligence</b></summary>
-
-<br>
-
-| Module | What it does |
-|---|---|
-| **Port exposure** | Common-port discovery with dangerous-service flagging |
-| **NVD CVE lookup** | Technology-led keyword search, labelled as candidates |
-| **Version fingerprints** | Matches detected versions against known end-of-life and vulnerable releases |
-| **Threat intelligence** | VirusTotal, Shodan, GreyNoise, Censys (all optional, all fail soft) |
-| **AI analysis** | Executive summary, risk level, prioritized recommendations, per-finding explanation |
-
-</details>
-
-<details>
-<summary><b>Security controls built into the platform itself</b></summary>
-
-<br>
-
-ReconTitan is a security tool, so it is also built like one:
-
-- **27-category injection screening** on every request — SQLi, XSS, SSTI, command injection, SSRF, XXE, NoSQL, LDAP, XPath, traversal, Log4Shell, prototype pollution, and more
-- **Multi-layer URL decoding** to catch double and triple-encoded bypasses
-- **SSRF protection**: targets are normalized, resolved, and pinned; redirects are revalidated; private, loopback, and link-local ranges are rejected by default
-- **DNS-rebinding resistance** — the resolved address is pinned for the connection
-- **Layered rate limiting** — burst, scan, danger, API, and export buckets with temporary bans
-- **Request-framing checks** for duplicate `Content-Length` and conflicting `Transfer-Encoding`
-- **Security headers** on every response, including early exits
-- **Bounded downloads** with per-module byte ceilings
-- **Non-root, read-only containers** with all capabilities dropped
-- **Production fail-closed startup** — refuses to boot with default secrets or wildcard CORS
-- **No inline scripts or event handlers** in the frontend; strict CSP
-
-</details>
-
----
-
-## ▣ Screenshots
-
-<div align="center">
-
-### Scan console
-
-<img src="docs/screenshots/01-dashboard.png" alt="ReconTitan dashboard with profile selection" width="92%">
-
-<sub>Five assessment profiles, live target validation, and an SSRF-guarded scan console.</sub>
-
-<br><br>
-
-### Danger Mode — the two-lock gate
-
-<img src="docs/screenshots/02-danger-gate.png" alt="Danger Mode authorization gate" width="92%">
-
-<sub>Selecting Danger Mode reveals a warning card. The scan button stays disabled until you tick the authorization box <b>and</b> type the exact phrase. The gate is never restored from storage — it must be re-acknowledged every session.</sub>
-
-<br><br>
-
-### Interactive report — Full Safe Scan
-
-<img src="docs/screenshots/03-report-full.png" alt="Full scan interactive report" width="92%">
-
-<sub>A masonry report of `example.com`: severity summary, AI analysis, and one card per module. Every card is clickable for full evidence and remediation.</sub>
-
-<br><br>
-
-### Interactive report — Danger Mode
-
-<img src="docs/screenshots/04-report-danger.png" alt="Danger Mode report with exploitation banner" width="92%">
-
-<sub>A real Danger Mode scan of <code>example.com</code>: 56 findings, 20 stages, 130 bounded requests in 175s. The banner reports exactly what was confirmed and what was not, and the OWASP matrix shows 10/10 categories exercised.</sub>
-
-<br><br>
-
-### OWASP coverage and danger findings
-
-<img src="docs/screenshots/09-owasp-coverage.png" alt="OWASP coverage matrix and danger findings" width="92%">
-
-<sub>Every OWASP Top 10 category is reported as TESTED or NOT TESTED with its finding count — coverage you can audit rather than assume.</sub>
-
-<br><br>
-
-### Finding detail — evidence, proof, and the full fix
-
-<img src="docs/screenshots/08-finding-modal.png" alt="Finding detail modal" width="88%">
-
-<sub>Each finding opens with its evidence, the exploitation proof where one was captured, and complete code-level remediation ending in a <code>VERIFY</code> step.</sub>
-
-<br><br>
-
-### Focused profiles
-
-<table>
-<tr>
-<td width="33%"><img src="docs/screenshots/05-report-recon.png" alt="Recon only report"><br><sub align="center"><b>Recon Only</b></sub></td>
-<td width="33%"><img src="docs/screenshots/06-report-osint.png" alt="OSINT report"><br><sub><b>OSINT &amp; Web</b></sub></td>
-<td width="33%"><img src="docs/screenshots/07-report-vuln.png" alt="Vulnerability report"><br><sub><b>Vulnerability Focus</b></sub></td>
-</tr>
-</table>
-
-<br>
-
-### PDF export
-
-<table>
-<tr>
-<td width="50%"><img src="docs/screenshots/pdf-cover-v041.png" alt="PDF cover page"></td>
-<td width="50%"><img src="docs/screenshots/pdf-finding-v041.png" alt="PDF finding detail"></td>
-</tr>
-</table>
-
-<sub>Portable, severity-ranked PDF with risk banner, methodology, module coverage, colour-coded findings index, structured evidence, and remediation.</sub>
-
-</div>
-
----
-
-## ☣ Danger Mode
-
-> [!CAUTION]
-> Danger Mode sends **active attack-simulation traffic**. It is disabled by default and requires two independent unlocks. Use it only against systems you own or hold written permission to assess.
-
-<div align="center">
-<img src="docs/assets/danger-pipeline.svg" alt="Danger Mode pipeline" width="100%">
-</div>
-
-### The two-lock gate
-
-Both are required, and both are re-checked inside the worker so a queued scan cannot run after you disable the profile:
-
-```bash
-# Lock 1 — environment opt-in (default: false)
-ALLOW_DANGER_MODE=true
-```
-
-```bash
-# Lock 2 — typed acknowledgement, compared in constant time
-danger_acknowledgement=I am authorized
-```
-
-Without both, the API returns **403** with an explanatory message.
-
-### What it adds
-
-| Stage | Purpose |
-|---|---|
-| `danger_recon` | Passive + bounded brute-force subdomain sweep, live-host fingerprinting |
-| `danger_axfr` | Full record enumeration and AXFR zone-transfer attempt against every name server |
-| `attack_surface` | Crawls in-scope pages, classifies every form, search field, parameter, API endpoint, upload, and object reference |
-| `injection_*` | SQL, command, HTML, XSS, SSTI, XXE, SSRF, NoSQL — with WAF-evasion payload variants |
-| `reverse_shell_assessment` | Documents the vector and confirming evidence — **detection only, never a payload** |
-| `dom_injection` | Source-to-sink dataflow, prototype pollution, DOM clobbering, postMessage origin checks |
-| `directory_fuzzing` / `path_traversal` | Bounded wordlist fuzzing with soft-404 filtering, plus 12 traversal encodings |
-| `idor_testing` | Sequential, base64, and UUID identifier enumeration with baseline-differential analysis |
-| `business_logic` | Numeric-domain validation, mass assignment, workflow bypass, one-time-value replay |
-| `data_exposure` | Record counts, field names, PII and credential classes, unbounded pagination |
-| `advanced_checks` | CORS exploitation, open redirect, GraphQL introspection, JWT weaknesses, CRLF, Host header |
-| `owasp_matrix` | Remaining OWASP categories and the tested / not-tested coverage matrix |
-
-### Confirmed exploitation
-
-Danger Mode does not stop at detection. When a parameter shows a signal — or, for **blind** injection, even when it does not — the exploitation engine attempts to *prove* the issue:
-
-| Class | How it is proven | Proof captured |
+| Variable | Default | What it does |
 |---|---|---|
-| **SQL injection** | Boolean differential across two requests, or arithmetic in a numeric context | Database version banner |
-| **Command injection** | The shell computes an arithmetic expression | Computed product, then the OS name |
-| **SSTI** | The engine evaluates arithmetic while the literal disappears | Computed product and engine family |
-| **XSS** | Reflection-context analysis | Context plus the surviving character set |
-| **Path traversal** | Response matches a system-file signature | Signature name and byte count |
-| **CORS / open redirect** | The server echoes an arbitrary origin, or issues the redirect | The response header itself |
-
-Confirmed findings are titled `[EXPLOITED]`, promoted in severity, and carry `exploited`, `exploit_technique`, `exploit_proof`, and `exploit_impact`.
-
-**Proof is deliberately minimal.** The engine extracts a version banner, an arithmetic result, a platform name, or a reflection context — **never rows, records, credentials, or personal data**.
-
-### Guards against false positives
-
-A scanner that cries wolf is worse than one that stays quiet, so confirmation is conservative:
-
-- **Value sensitivity** — arithmetic only counts if the endpoint's output actually varies with the parameter
-- **Silent defaults** — an app that falls back to a default when `int()` raises is rejected, because it mimics arithmetic evaluation
-- **Reflection is not XSS** — encoded breakout characters mean low severity and *not* exploited
-- **Template literals** — SSTI requires the product present **and** the literal absent
-- **One-hop DOM flows** are candidates, not confirmations
-
-### Safety bounds — enforced in code
-
-| Guarantee | How |
-|---|---|
-| No data created, modified, or deleted | Read-only canaries; logic checks observe validation without completing a transaction |
-| No data exfiltration | Exposure is *quantified* (counts, field names, classes); values are fingerprinted and discarded |
-| No credential stuffing | One fixed non-credential value; no list, no account targeted |
-| No reverse shell | Vectors documented; no connecting payload is generated or sent |
-| No third-party contact | SSRF probes use private canaries the scanner never fetches |
-| Bounded traffic | Ceilings on requests, payloads, endpoints, crawl depth, and identifiers |
-| Bounded time | Wall-clock deadline; pacing and timeouts clamp to remaining budget |
-| Always terminates | Pending stages are skipped and recorded — **a report is always produced** |
-| Fail-soft | A failing stage is recorded; remaining stages still run |
-
-Full documentation: **[docs/DANGER_MODE.md](docs/DANGER_MODE.md)** · Authorization requirements: **[SECURITY.md](SECURITY.md)**
-
----
-
-## ◫ OWASP Top 10 coverage
-
-| Category | Covered by |
-|---|---|
-| **A01** Broken Access Control | IDOR differential enumeration, forced browsing, method-variation checks |
-| **A02** Cryptographic Failures | TLS protocol/cipher review, plaintext-HTTP detection, secret fingerprinting |
-| **A03** Injection | SQL, command, HTML, XSS, SSTI, XXE, NoSQL, DOM injection |
-| **A04** Insecure Design | Login rate limiting, password-reset exposure, unvalidated upload, business logic |
-| **A05** Security Misconfiguration | Debug endpoints, directory listing, verbose errors, headers, AXFR |
-| **A06** Vulnerable Components | NVD candidates plus known-vulnerable version fingerprints |
-| **A07** Auth Failures | CSRF tokens, password policy, session cookie flags, lockout behaviour |
-| **A08** Integrity Failures | Missing subresource integrity, deserialization indicators |
-| **A09** Logging & Monitoring | Missing headers plus absence of observable rate limiting |
-| **A10** SSRF | Private-canary probing on URL-accepting parameters |
-
-> **TESTED means a module ran — not that the application is clean. NOT TESTED means unassessed.** Categories needing authenticated state, business knowledge, or source access require a manual engagement.
-
----
-
-## ▤ Reports
-
-<table>
-<tr><td width="50%" valign="top">
-
-### Interactive
-- Masonry card layout, one card per module
-- Severity summary bar and metadata strip
-- Click any finding for evidence, proof, and fix
-- AI risk banner with prioritized actions
-- Danger Mode banner, OWASP matrix, attack-surface and injection tables
-- Export **JSON** or standalone **HTML**
-
-</td><td width="50%" valign="top">
-
-### PDF
-- Branded cover with overall risk banner
-- Scan metadata, timeline, and severity cards
-- Methodology and module-coverage table
-- Colour-coded findings index
-- Per-finding evidence, exploitation proof, and remediation
-- Danger Mode section with OWASP matrix
-- Appendices: severity model and limitations
-
-</td></tr>
-</table>
-
-### Remediation quality
-
-Every finding ships a complete fix, not a platitude — root cause, the vulnerable pattern, the corrected pattern in the languages teams actually use, configuration changes, defence-in-depth, and a **VERIFY** section:
-
-```text
-ROOT CAUSE
-User input is concatenated into a SQL statement, so the database parses attacker
-text as code rather than treating it as a value.
-
-THE FIX - parameterize every query. Never build SQL with string operations.
-
-Python (psycopg / sqlite3 / MySQLdb):
-    # VULNERABLE
-    cur.execute("SELECT * FROM orders WHERE id = " + user_id)
-    # FIXED
-    cur.execute("SELECT * FROM orders WHERE id = %s", (user_id,))
-...
-VERIFY
-Re-run the boolean-differential probe from the evidence. The TRUE and FALSE
-conditions must now return byte-identical responses.
-```
-
-**29 remediation entries, ~1,100 lines** covering Python, PHP, Node.js, Java, C#, Go, nginx, Apache, and BIND.
-
----
-
-## ⬢ API reference
-
-Protected routes accept either header:
-
-```http
-X-ReconTitan-Key: your-access-key
-```
-
-```http
-Authorization: Bearer your-access-key
-```
-
-| Method | Endpoint | Auth | Purpose |
-|---|---|---|---|
-| `GET` | `/api/health` | Public | Health check |
-| `GET` | `/api/capabilities` | Public | Profiles, modules, Danger Mode metadata |
-| `GET` | `/api/news` | Public | Cached cybersecurity feed |
-| `GET` | `/api/test-scan` | Protected | Synchronous scan — no MongoDB or Celery needed |
-| `POST` | `/api/scan` | Protected | Queue a scan in Celery |
-| `GET` | `/api/scan/{id}/status` | Protected | Poll progress and module state |
-| `GET` | `/api/scan/{id}/report` | Protected | Normalized JSON report |
-| `GET` | `/api/scan/{id}/report.pdf` | Protected | Export a stored scan as PDF |
-| `POST` | `/api/report/pdf` | Protected | Render supplied scan data as PDF |
-| `POST` | `/api/verify` | Protected | AI triage of one finding — verdict, impact, remediation |
-| `GET` | `/api/ai/status` | Protected | Which AI backend is live (ollama / openai / fallback) |
-| `POST` | `/api/ai/explain` | Protected | Explain a security topic or scan category |
-| `POST` | `/api/ai/explain-finding` | Protected | Short plain-English explanation of one finding |
-
-<details>
-<summary><b>Examples</b></summary>
-
-<br>
-
-**Synchronous scan**
-
-```bash
-curl "http://127.0.0.1:8000/api/test-scan?target=example.com&scan_type=osint_only"
-```
-
-**Danger Mode — both locks required**
-
-```bash
-curl "http://127.0.0.1:8000/api/test-scan?target=example.com&scan_type=danger&danger_acknowledgement=I%20am%20authorized"
-```
-
-**Queue a scan**
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/scan -H "Content-Type: application/json" -d '{"target":"example.com","scan_type":"full"}'
-```
-
-**Check whether Danger Mode is enabled**
-
-```bash
-curl -s http://127.0.0.1:8000/api/capabilities | python -c "import json,sys; print(json.load(sys.stdin)['danger_mode']['enabled'])"
-```
-
-</details>
-
----
-
-## ⬡ Architecture
-
-<div align="center">
-<img src="docs/assets/architecture-v2.svg" alt="ReconTitan architecture" width="100%">
-</div>
-
-<details>
-<summary><b>Project structure</b></summary>
-
-<br>
-
-```text
-ReconTitan/
-├── backend/
-│   ├── app/
-│   │   ├── main.py                 # FastAPI entry point, middleware stack
-│   │   ├── config.py               # Environment configuration + production validation
-│   │   ├── targeting.py            # Target normalization, SSRF and rebinding defense
-│   │   ├── celery_app.py           # Queue configuration and routing
-│   │   ├── middleware/security.py  # 27-category injection screen, rate limits, headers
-│   │   ├── models/schemas.py       # Pydantic v2 request/response models
-│   │   ├── routers/                # capabilities · scans · reports · news · test_scan
-│   │   ├── services/
-│   │   │   ├── capabilities.py     # Canonical profile and module metadata
-│   │   │   ├── danger_mode.py      # Opt-in gate, bounds, OWASP catalogue
-│   │   │   └── pdf_report.py       # PDF renderer
-│   │   └── tasks/
-│   │       ├── http_client.py      # Pinned, bounded, redirect-revalidating client
-│   │       ├── scan_tasks.py       # Celery orchestration
-│   │       ├── recon/              # WHOIS, DNS, crt.sh, wayback, tech, JS, takeover…
-│   │       ├── osint/              # headers, TLS, CORS, cookies, WAF, threat intel
-│   │       └── vulnscan/
-│   │           ├── nvd_lookup.py
-│   │           └── danger/         # ☣ 18 modules, ~7,400 lines
-│   │               ├── pipeline.py         # Stage coordinator + deadline guard
-│   │               ├── budget.py           # Request/payload/time ceilings, pacing
-│   │               ├── payloads.py         # WAF-evasion payload library
-│   │               ├── exploit.py          # Confirmation engine
-│   │               ├── remediation.py      # Code-level fixes
-│   │               ├── attack_surface.py   # Input-point inventory
-│   │               ├── injection.py        # 8 injection classes
-│   │               ├── dom.py              # Source-to-sink dataflow
-│   │               ├── business_logic.py   # Logic flaw probes
-│   │               ├── data_exposure.py    # Exposure quantification
-│   │               ├── advanced.py         # CORS, redirect, GraphQL, JWT, CRLF
-│   │               ├── idor.py · directory.py · dns_axfr.py
-│   │               ├── owasp.py · recon.py · reverse_shell.py
-│   └── tests/                      # 121 tests across 11 files
-├── frontend/                       # Static dashboard and report (no build step)
-├── docs/                           # Danger Mode docs, diagrams, screenshots
-├── nginx/nginx.conf                # TLS, headers, per-zone rate limits
-├── docker-compose.yml              # Nginx · API · worker · Redis · MongoDB
-└── .env.example                    # Every setting, documented
-```
-
-</details>
-
-**Request flow:** browser → Nginx (TLS, headers, rate limits) → FastAPI (`SecurityMiddleware`) → target validation and DNS pinning → Celery dispatch or synchronous run → scanner modules → normalization → MongoDB → AI summary → interactive report and PDF.
-
----
-
-## ⚙ Configuration
-
-<details open>
-<summary><b>Required in production</b></summary>
-
-<br>
-
-| Variable | Purpose |
-|---|---|
-| `DOMAIN` | Public hostname for Nginx and trusted-host validation |
-| `SECRET_KEY` | Application secret, ≥32 random characters |
-| `API_ACCESS_KEY` | Shared API access key, ≥32 random characters |
-| `CORS_ORIGINS` | Explicit comma-separated origins — never `*` |
-| `MONGO_ROOT_PASS` / `MONGO_PASS` | Administrative and least-privileged app passwords |
-| `REDIS_PASSWORD` | Broker password |
-
-The app **refuses to start** in production with default secrets, wildcard CORS, or a missing API key.
-
-</details>
-
-<details>
-<summary><b>Scanner safety and limits</b></summary>
-
-<br>
-
-| Variable | Default | Meaning |
-|---|---:|---|
-| `ALLOW_PRIVATE_TARGETS` | `false` | Allow RFC1918/private targets — never enable publicly |
-| `ENABLE_ACTIVE_VULN_TOOLS` | `false` | Enable nuclei, nikto, dir fuzzing, sqlmap |
-| `MAX_REQUEST_BODY_BYTES` | `2097152` | Global API body cap |
-| `JS_ANALYSIS_MAX_FILES` | `20` | Same-scope JavaScript files |
-| `JS_ANALYSIS_MAX_BYTES` | `1048576` | Per-script byte cap |
-| `TAKEOVER_MAX_SUBDOMAINS` | `150` | Subdomains checked for takeover |
-| `RATE_LIMIT_BURST` | `30` | Short-window burst allowance |
-| `RATE_LIMIT_SCAN` | `5` | Scan starts per minute |
-| `RATE_LIMIT_DANGER` | `2` | Danger scans per minute, stacked on the above |
-| `RATE_LIMIT_API` | `120` | General API requests per minute |
-| `RATE_LIMIT_EXPORT` | `10` | PDF exports per minute |
-
-</details>
-
-<details>
-<summary><b>Danger Mode limits</b></summary>
-
-<br>
-
-Every value is a hard ceiling, never a target.
-
-| Variable | Default | Meaning |
-|---|---:|---|
-| `ALLOW_DANGER_MODE` | `false` | Master opt-in — 403 while false |
-| `DANGER_MAX_SCAN_SECONDS` | `240` | Wall-clock ceiling; pending stages are skipped and reported |
-| `DANGER_MAX_REQUESTS_TOTAL` | `500` | Requests for the whole danger phase |
-| `DANGER_MAX_REQUESTS_PER_MODULE` | `80` | Requests any single module may send |
-| `DANGER_MAX_PAYLOADS_PER_SCAN` | `400` | Payload-bearing probes |
-| `DANGER_MAX_ENDPOINTS` | `15` | Attack-surface entries tested |
-| `DANGER_MAX_CRAWL_PAGES` | `10` | Pages fetched building the inventory |
-| `DANGER_MAX_HOSTS` | `5` | Discovered hosts probed |
+| `ALLOW_DANGER_MODE` | `true` | Master switch for active testing |
+| `DANGER_MAX_SCAN_SECONDS` | `240` | Wall-clock ceiling for the danger phase |
+| `DANGER_MAX_REQUESTS_TOTAL` | `500` | Hard request ceiling for a whole danger scan |
 | `DANGER_REQUEST_DELAY_MS` | `150` | Pacing between probes |
-| `DANGER_TIME_DELAY_SECONDS` | `2` | Delay for the single time-based blind probe |
-| `DANGER_SUBDOMAIN_BRUTE_LIMIT` | `100` | Names from the built-in wordlist |
-| `DANGER_DIR_BUST_WORDLIST` | `120` | Paths from the built-in wordlist |
-| `DANGER_IDOR_MAX_IDS` | `10` | Identifiers enumerated per object reference |
-| `DANGER_ENABLE_XXE_OOB` | `false` | Out-of-band XXE — off and intentionally unimplemented |
+| `SCAN_TOOL_CONCURRENCY` | `8` | Modules run in parallel |
+| `ALLOW_PRIVATE_TARGETS` | `false` | Allow RFC1918 targets. Only for testing against your own lab |
+| `ENABLE_ACTIVE_VULN_TOOLS` | `false` | Enables nuclei/nikto/dir-fuzzing/sqlmap when installed |
 
-Seeing **"budget exhausted"** or **"time limit reached"** in a report means coverage was partial. Raise the relevant ceiling, or narrow the target.
+### AI explanations
 
-</details>
-
-<details>
-<summary><b>Optional integrations</b></summary>
-
-<br>
-
-**Keyless services contacted on every default scan.** These need no configuration, so it is
-easy to miss that they receive the target you are scanning:
-
-| Service | Used by | What it receives |
+| Variable | Default | What it does |
 |---|---|---|
-| `crt.sh` | subdomain enumeration, takeover checks | the domain |
-| `ipinfo.io` | IP geolocation / ASN | the resolved IP |
-| `web.archive.org` | historical URL discovery | the domain |
-| `api.hackertarget.com` | port-scan fallback, reverse-IP lookup | the resolved IP |
+| `AI_PROVIDER` | `auto` | `auto`, `ollama`, `openai`, or `none` |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local model endpoint |
+| `OLLAMA_MODEL` | *(empty)* | e.g. `qwen2.5:7b` |
 
-The first three are intrinsic to the modules named after them and are credited as the tool on
-every finding they produce. **`api.hackertarget.com` is opt-in** (`ALLOW_HACKERTARGET`, default
-`false`) because it was neither named in the UI nor required for the scan to work: it was a
-silent fallback. Your authorization to scan a host does not automatically extend to disclosing
-that host to an unrelated service. With it disabled and no local `nmap`/`rustscan` installed,
-the port scan reports **"Port Scan Did Not Run"** rather than implying no ports are open.
-
-**Keyed integrations** (all optional, all fail soft):
-`OLLAMA_BASE_URL`, `OPENAI_API_KEY`, `VIRUSTOTAL_API_KEY`, `SHODAN_API_KEY`, `CENSYS_API_ID`, `CENSYS_API_SECRET`, `GREYNOISE_API_KEY`, `SECURITYTRAILS_API_KEY`, `URLSCAN_API_KEY`, `INTELX_API_KEY`.
-
-Each is optional and fails soft. Some submit the target to a third party — review their privacy and retention policy before enabling.
-
-</details>
+With `auto`, ReconTitan probes for a local Ollama instance and falls back to a deterministic template if there isn't one. **Findings never leave your machine** unless you explicitly choose `openai`. Full guide: [`docs/OLLAMA_SETUP.md`](docs/OLLAMA_SETUP.md).
 
 ---
 
-## 🔑 API access keys
+## Danger Mode
 
-Protected endpoints accept `X-ReconTitan-Key: <secret>` or `Authorization: Bearer <secret>`.
+Danger Mode sends **real attack traffic**. It is not a simulation in the sense of "pretend" — the probes are genuine, they are simply bounded, paced and non-destructive.
 
-**One shared key** — the original behaviour, unchanged:
+### Getting in requires three deliberate acts
 
-```bash
-API_ACCESS_KEY=<32+ character random value>
-```
+1. `ALLOW_DANGER_MODE=true` must be set by whoever runs the server.
+2. The user must tick an ownership/authorisation checkbox.
+3. The user must **type** the exact phrase:
 
-**Named keys**, when you want to know which caller acted and to revoke one of them
-independently:
+   ```
+   I am authorized
+   ```
 
-```bash
-API_ACCESS_KEYS=ci:<secret>,scanner-ui:<secret>,alice:<secret>
-```
+The typed phrase is required by the API itself, not just the UI — the gate cannot be bypassed by calling the endpoint directly.
 
-Both may be set at once; a key supplied via `API_ACCESS_KEY` is recorded as `default`.
+### What keeps it safe
 
-The label is an **audit handle, not a privilege** — every key still grants the same
-all-or-nothing access. What it buys is:
+- **Bounded** — hard ceilings on total requests, requests per module, payloads per scan and endpoints touched.
+- **Paced** — a configurable delay between probes, with automatic exponential backoff on 429/503.
+- **Time-capped** — at the wall-clock limit, remaining stages are skipped and **the report is still produced**. You always get results, never an error page.
+- **Non-destructive** — no data is modified or deleted. Payloads are detection probes, not exploits.
+- **Evidence-only storage** — response bodies are fingerprinted, never retained.
+- **Always candidate-graded** — `requires_manual_validation` is unconditionally true on every danger finding.
 
-- **Attribution.** The audit trail records `api_caller: "ci"` alongside the IP and path, so a
-  scan can be traced to a caller rather than to "somebody who held the secret". The secret
-  itself is never written to the trail.
-- **Independent revocation.** Delete one entry and restart; every other key keeps working.
-  Previously a leaked credential meant rotating the one secret every consumer shared.
-
-Production validation requires at least one key of 32+ characters and names any that are too
-short, so a weak entry in a list of five is identifiable.
-
-> **This is not user accounts.** There are no roles, no per-key scopes, and no revocation
-> history — revoking means editing configuration and restarting. If you need real identities,
-> put an authenticating proxy in front of the API.
+Full detail: [`docs/DANGER_MODE.md`](docs/DANGER_MODE.md).
 
 ---
 
-## 🗄️ Migrating an existing MongoDB deployment
+## The SOC console
 
-`mongo/init/01-create-app-user.js` runs only from `/docker-entrypoint-initdb.d`, which Mongo
-executes **once, when the data directory is empty**. A deployment created before that script
-existed therefore has no application user, and never will — the volume is not empty, so the
-hook never fires again. Those deployments keep running as the Mongo **root** user, which
-defeats the privilege separation the script was written to establish.
+A separate application on its own port, with its own authentication:
 
-`mongo/migrate-existing-deployment.js` fixes that in place. It is idempotent and safe to run
-repeatedly:
+- **Overview** — threat events, injections blocked, auth failures, rate-limited requests, failed console logins, unique sources
+- **Detections** — behavioural patterns: port-discovery sweeps, payload injection, admin-console probing, DDoS-shaped traffic
+- **Threats / Event Feed / Scan Activity / Clients / Targets** — attribution for every request and scan
+- **Blocklist** — refuse to *scan* certain hosts, and refuse to *serve* certain callers (single IPs or CIDR ranges)
 
-```bash
-docker compose cp mongo/migrate-existing-deployment.js mongo:/tmp/migrate.js
-```
+Security properties worth knowing:
 
-```bash
-docker compose exec -T mongo mongosh -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASS" --authenticationDatabase admin --eval "var APP_DB='recontitan', APP_USER='recontitan_app', APP_PASS='<password>', ROTATE=false" /tmp/migrate.js
-```
-
-It creates the user when absent, adds the `readWrite` grant if the user exists without it,
-and verifies the `scans` indexes so a migrated database matches a freshly initialised one.
-Pass `ROTATE=true` to reset an existing user's password — left `false`, an existing password
-is never touched, so running this against a healthy deployment cannot lock the application
-out.
-
-Then point the application at the app user and restart:
-
-```bash
-docker compose up -d --force-recreate api worker
-```
+- Not mounted on the public app at all — a routing bug cannot expose it
+- Constant-time token comparison, with lockout after repeated failures
+- Optional `ADMIN_IP_ALLOWLIST` (single addresses or CIDR)
+- Supports token rotation via `ADMIN_TOKEN_PREVIOUS` so you can rotate without downtime
+- All timestamps rendered in **IST**
 
 ---
 
-## 🔧 Installing the optional scanners
+## Troubleshooting
 
-Several modules shell out to an external binary. The Docker image ships **nmap** only, so on a
-default deployment the rest are skipped. That is now visible rather than silent — each reports
-a *"Not Installed — Skipped"* finding, and `GET /api/capabilities` lists them under
-`binary_modules_unavailable`. **A skipped module is never evidence that the target is unaffected.**
-
-| Binary | Module | Ships in image | Nature |
-|---|---|---|---|
-| `nmap` | port scan | ✅ yes | passive |
-| `subfinder` | subdomain enumeration | ❌ no | passive |
-| `amass` | subdomain enumeration | ❌ no | passive |
-| `theHarvester` | OSINT aggregation | ❌ no | passive |
-| `nuclei`, `nikto`, `ffuf`/`gobuster`, `sqlmap` | active vuln checks | ❌ no | **active — opt-in by design** |
-
-The active four are deliberately absent: they send intrusive traffic and stay disabled until
-explicitly enabled *and* installed.
-
-To add the passive Go tools, insert a builder stage in `backend/Dockerfile` before the runtime
-stage:
-
-```dockerfile
-FROM golang:1.23-bookworm AS tools
-RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@v2.6.6 \
- && go install github.com/owasp-amass/amass/v4/...@v4.2.0
-```
-
-and copy them into the runtime stage:
-
-```dockerfile
-COPY --from=tools /go/bin/subfinder /usr/local/bin/subfinder
-COPY --from=tools /go/bin/amass /usr/local/bin/amass
-```
-
-> **Check the version tags before building.** Pin to current released tags rather than `@latest`
-> — an unpinned install is exactly the supply-chain gap the audit flags. `amass` in particular
-> adds roughly 100 MB to the image, so skip it if `subfinder` plus `crt.sh` gives you enough
-> coverage; the two overlap heavily for passive enumeration.
-
-`theHarvester` installs with `pip install theHarvester`, but it pulls a large dependency tree
-into the runtime image — prefer running it on a separate host if you need it.
-
----
-
-## 🧠 AI explanations (Ollama)
-
-ReconTitan finds vulnerabilities with deterministic Python — no model is
-involved in deciding what a finding is. The AI layer sits **on top** of that
-result and does one job: turn scanner output into something a human can act on.
-If no model is reachable, every AI surface falls back to built-in static text,
-so a scan never fails because AI is down.
-
-**What the model is asked to do**
-
-| Surface | Endpoint | What you get |
-|---|---|---|
-| Executive summary on the report | automatic, at end of scan | Risk level, 2–3 sentence posture summary, top recommendations |
-| Per-finding explanation | automatic, top findings | Plain English: what it is, what goes wrong, how to fix |
-| **🤖 Verify with AI** button | `POST /api/verify` | Triage verdict + confidence, attacker impact, remediation steps, references |
-| **🧠 Explain this topic** button | `POST /api/ai/explain` | Teaches the *concept* behind the finding (what CORS is, why HSTS matters) |
-
-> **What "Verify with AI" does — and does not do.** It does **not** re-attack the
-> target. No packet is sent to the host when you press it. It sends the finding
-> the scanner already recorded — title, severity, evidence — to the model and asks
-> for a second opinion: does this evidence actually support a real issue, or is it
-> scanner noise? You get back one of `TRUE_POSITIVE`, `LIKELY_TRUE_POSITIVE`,
-> `NEEDS_MANUAL_REVIEW`, or `LIKELY_FALSE_POSITIVE`, with a confidence level,
-> plus impact and fix steps. Treat it as triage assistance, not proof — a local
-> model can be wrong in both directions, which is why the verdict set includes
-> "needs manual review" and the report still shows the raw evidence underneath.
-
-### Setup
+Real problems, with the actual fix. Most were hit during development.
 
 <details open>
-<summary><b>1. Install and start Ollama</b></summary>
+<summary><b>❗ <code>module 'lib' has no attribute 'GEN_EMAIL'</code> — the #1 setup killer</b></summary>
 
-<br>
+**Cause:** Anaconda (or another system Python) ships a patched `pyOpenSSL` that conflicts with the `cryptography` version this project needs.
 
-Download from [ollama.com](https://ollama.com), then pull a model:
-
-```bash
-ollama pull llama3.1:8b
-```
-
-Smaller boxes can use `qwen2.5:1.5b-instruct` (~1 GB, runs on CPU) or
-`llama3.2:3b`. Bigger models write noticeably better security prose; the 1.5B
-class is usable but terse and occasionally imprecise.
-
-Confirm the server is up — it listens on `11434` by default:
+**Fix:** use a clean virtual environment — do not `pip install` into a base Anaconda environment.
 
 ```bash
-curl http://localhost:11434/api/tags
+python -m venv .venv
 ```
 
-</details>
-
-<details open>
-<summary><b>2. Point ReconTitan at it</b></summary>
-
-<br>
-
-In `.env`:
-
-```bash
-AI_PROVIDER=auto
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=
-```
-
-Leaving `OLLAMA_MODEL` blank auto-selects the first installed model, so this
-works against whatever you pulled. Set it explicitly to pin one.
-
-`AI_PROVIDER` controls the whole layer:
-
-| Value | Behaviour |
-|---|---|
-| `auto` (default) | Ollama if reachable, else OpenAI if keyed, else static text |
-| `ollama` | Local model only — nothing ever leaves the host |
-| `openai` | Hosted OpenAI only |
-| `none` | AI fully disabled; every surface uses the built-in explanations |
+If you are already inside a conda environment, `conda deactivate` first, then create the venv.
 
 </details>
 
 <details>
-<summary><b>3. Running in Docker</b></summary>
+<summary><b><code>The token '&&' is not a valid statement separator</code> (Windows PowerShell)</b></summary>
 
-<br>
+**Cause:** Windows PowerShell 5.1 does not support `&&`.
 
-The compose file defaults to `http://host.docker.internal:11434`, which reaches
-an Ollama running on your host machine (`extra_hosts` is declared so this also
-resolves on Linux). Nothing else to do if Ollama is already installed natively.
+**Fix:** use `;` or run the commands on separate lines.
 
-To run Ollama **inside** compose instead, add a service and point the URL at it:
-
-```yaml
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama_models:/root/.ollama
-    restart: unless-stopped
+```powershell
+cd backend; python -m uvicorn app.main:app --port 8000
 ```
 
-then set `OLLAMA_BASE_URL=http://ollama:11434` and add `ollama_models:` under
-the top-level `volumes:` key. Note the container needs a GPU passthrough
-(`deploy.resources.reservations.devices`) to be fast — on CPU it works but a
-full scan summary takes tens of seconds.
+Or use Git Bash, where `&&` works normally.
 
 </details>
 
 <details>
-<summary><b>4. Verify it is live</b></summary>
+<summary><b><code>Activate.ps1 cannot be loaded because running scripts is disabled</code></b></summary>
 
-<br>
-
-```bash
-curl -s http://localhost:8000/api/ai/status
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-`active_backend` tells you what is actually answering:
-
-```json
-{"provider":"auto","active_backend":"ollama","model":"llama3.1:8b",
- "ollama":{"available":true,"error":""}}
-```
-
-If it says `"active_backend":"fallback"`, the `ollama.error` field explains why
-— connection refused means Ollama is not running, and an empty model list means
-nothing has been pulled. The report page shows the same information as a badge
-next to the AI buttons, so you can always tell a model's answer from a
-canned one.
-
-</details>
-
-### Cost controls
-
-Every explanation is one model round-trip, and a local CPU model can take
-seconds each. The per-scan narration budget is capped three ways, so a slow
-model can never hold a scan open:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `AI_MAX_FINDING_EXPLANATIONS` | `8` | How many findings get an inline explanation (highest severity first) |
-| `AI_EXPLANATION_BUDGET_SECONDS` | `90` | Wall-clock ceiling for the whole narration pass |
-| `AI_EXPLANATION_CONCURRENCY` | `2` | Parallel requests to the model |
-| `OLLAMA_TIMEOUT` | `120` | Per-request timeout; a cold model load is slow |
-| `OLLAMA_NUM_CTX` | `4096` | Context window |
-| `OLLAMA_KEEP_ALIVE` | `5m` | How long Ollama keeps the model resident between calls |
-
-Findings that run out of budget simply keep the static explanation the report
-already renders.
-
-### Privacy
-
-With `AI_PROVIDER=ollama` (or `auto` with Ollama reachable), finding text never
-leaves your machine — that is the main reason to prefer a local model here,
-since scan evidence can contain hostnames, paths, and tokens from the target.
-`AI_PROVIDER=openai` sends that same text to OpenAI; only enable it against
-targets whose data you are permitted to share with a third party.
-
----
-
-## ✓ Testing
-
-```bash
-pip install -r backend/requirements-dev.txt
-```
-
-```bash
-pytest -q backend/tests
-```
-
-```text
-121 passed
-```
-
-| Suite | Covers |
-|---|---|
-| `test_api_security.py` | Headers, injection blocking, rate limits, API-key gate, content-type enforcement |
-| `test_targeting.py` | Normalization, SSRF rejection, DNS rebinding |
-| `test_http_client.py` | Pinning, redirect revalidation, byte caps |
-| `test_danger_mode.py` | Opt-in gate, discovery, classification, budget, deadline, secret hygiene |
-| `test_danger_integration.py` | End-to-end against a local fixture server |
-| `test_danger_exploit_integration.py` | **Exploitation proof** against a deliberately vulnerable fixture |
-| `test_features.py` | Tech stack, favicon, JS analysis, takeover, WHOIS |
-| `test_pdf.py` | PDF rendering, danger section, escaping |
-| `test_capabilities.py` · `test_config.py` · `test_frontend_security.py` | Metadata, config validation, frontend CSP rules |
-
-**No test contacts an external host.** The integration suites start a local fixture server on `127.0.0.1`.
-
-Additional checks:
-
-```bash
-python -m compileall -q backend/app
-```
-
-```bash
-node --check frontend/dashboard.js && node --check frontend/report.js
-```
-
----
-
-## ⚑ Troubleshooting
-
-<details>
-<summary><b>Danger Mode is disabled / the scan is rejected with 403</b></summary>
-
-<br>
-
-Both locks are required. Set `ALLOW_DANGER_MODE=true` in `.env`, restart, and supply the typed acknowledgement. Verify the server sees it:
-
-```bash
-curl -s http://127.0.0.1:8000/api/capabilities | python -c "import json,sys; print(json.load(sys.stdin)['danger_mode'])"
-```
+Applies to the current window only and reverts when you close it.
 
 </details>
 
 <details>
-<summary><b>The UI does not reflect my changes</b></summary>
+<summary><b><code>[Errno 48] Address already in use</code> / port 8000 busy</b></summary>
 
-<br>
+Run on another port:
 
-Static assets are versioned with a `?v=` token. If you edit `dashboard.js`, `report.js`, or their stylesheets, bump the token in `index.html` and `report.html` — otherwise browsers keep serving the cached copy.
+```bash
+python -m uvicorn app.main:app --reload --port 8080
+```
 
-</details>
-
-<details>
-<summary><b>"budget exhausted" or "time limit reached" in the report</b></summary>
-
-<br>
-
-The scan hit a safety ceiling and stopped early, so coverage is partial — it does **not** mean the untested areas are clean. Raise `DANGER_MAX_REQUESTS_TOTAL` / `DANGER_MAX_SCAN_SECONDS`, or scan a narrower target.
+Or find what is holding it — Linux/macOS: `lsof -i :8000` · Windows: `netstat -ano | findstr :8000`
 
 </details>
 
 <details>
-<summary><b>Scans fail or return nothing</b></summary>
+<summary><b>Scans work, but the SOC console is empty and history never saves</b></summary>
 
-<br>
+**Cause:** MongoDB is not reachable. This is deliberately non-fatal — scanning continues, storage silently no-ops.
 
-- Private, loopback, and reserved targets are rejected by design
-- The target must resolve publicly
-- `/api/scan` requires MongoDB; use `/api/test-scan` for a local run
-- Check the server log — modules fail soft and record the reason
+**Confirm it:**
+
+```bash
+python -m app.preflight
+```
+
+**Fix:** start MongoDB (`docker compose up -d mongo`), or set `MONGO_URI` to an Atlas connection string.
 
 </details>
 
 <details>
-<summary><b>A takeover, CVE, or exploitation result appears</b></summary>
+<summary><b><code>Open Ports: Binary not installed</code></b></summary>
 
-<br>
+Not an error. `nmap` is not on your PATH, so the scan fell back to the HackerTarget API and said so.
 
-Reproduce it manually before acting. CVE matches are keyword candidates; takeover requires provider-side confirmation; exploitation proof should be re-run from an authorized system to rule out caching, load balancing, and dynamic content.
+For full port results install nmap — Linux: `sudo apt install nmap` · macOS: `brew install nmap` · Windows: <https://nmap.org/download.html>
+
+</details>
+
+<details>
+<summary><b>Danger Mode stays greyed out / <code>LOCKED</code></b></summary>
+
+All three are required:
+
+1. `ALLOW_DANGER_MODE=true` in `.env` — **restart the server after changing it**
+2. The authorisation checkbox ticked
+3. The phrase `I am authorized` typed exactly — lowercase `a`, no trailing space
+
+</details>
+
+<details>
+<summary><b><code>Malicious input blocked</code> when scanning <code>localhost</code></b></summary>
+
+Working as designed — the SSRF guard refuses private and loopback targets.
+
+For a local lab, set `ALLOW_PRIVATE_TARGETS=true`. Only do this on a machine where you own everything on the local network.
+
+</details>
+
+<details>
+<summary><b><code>[crt.sh] 502 Bad Gateway</code> or <code>[wayback] CDX query failed</code></b></summary>
+
+Transient failures of public third-party services. The scan continues and reports what it could retrieve. Re-run later if you specifically need archived URLs.
+
+</details>
+
+<details>
+<summary><b>A scan seems frozen for 15+ seconds</b></summary>
+
+Almost certainly normal. Check the live log — if the last line is Wayback, certificate transparency or NVD, it is waiting on someone else's server. See [how long each profile really takes](#scan-profiles--and-how-long-each-really-takes).
+
+</details>
+
+<details>
+<summary><b>Everything returns 401 <code>API access key required</code></b></summary>
+
+`API_ACCESS_KEY` is set, so every `/api/` route needs the header. Either supply it:
+
+```bash
+curl -H "X-ReconTitan-Key: <your key>" "http://127.0.0.1:8000/api/test-scan?target=example.com"
+```
+
+…or unset `API_ACCESS_KEY` in `.env` for a local-only instance.
+
+</details>
+
+<details>
+<summary><b><code>ValueError: invalid literal for int()</code> on startup</b></summary>
+
+An environment variable exists but is **blank**. Current versions treat blank as unset, so this only affects older checkouts — but an empty value in `.env` is always a mistake. Delete the line rather than leaving it empty.
 
 </details>
 
 ---
 
-## ⚖ Limitations
-
-ReconTitan is not proof that a target is secure or vulnerable.
-
-External observations can be incomplete, stale, blocked, rate-limited, or intentionally deceptive. Danger Mode is a bounded **simulation**: a confirmed finding is a strong lead, an absent finding is not a clean bill of health, and a `NOT TESTED` OWASP category is unassessed rather than clean. AI output can be wrong and must be checked against evidence. The built-in rate limiter is process-local — enforce shared limits at the edge when scaling horizontally. The access-key model is a shared secret, not a multi-user identity system.
-
----
-
-## ⚭ Contributing
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md), branch from `main`, run the tests, avoid committing secrets or scan data, and open a pull request with validation evidence.
+## Testing
 
 ```bash
-pytest -q backend/tests && python -m compileall -q backend/app
+cd backend
+python -m pytest -q --ignore=app
 ```
+
+```
+551 passed, 11 skipped
+```
+
+`--ignore=app` skips a router file named `test_scan.py` that pytest would otherwise mis-collect as a test module — it is an application route, not a test.
+
+The suite covers the security middleware, SSRF guards, the danger budget, scan targeting, deployment configuration, serverless behaviour, client-IP attribution and admin authentication.
 
 ---
 
-## ⚖ License
+## Legal and ethical use
 
-Released under the [MIT License](LICENSE).
+**Only scan systems you own or have explicit written permission to test.**
+
+Unauthorised scanning is illegal in most jurisdictions — the Computer Fraud and Abuse Act in the US, the Computer Misuse Act in the UK, and the Information Technology Act in India, among many others. Passive reconnaissance sits in a grey area. **Danger Mode does not** — it sends active attack traffic and is unambiguously covered by those laws.
+
+Safe targets to learn on:
+
+- Domains you own
+- Deliberately vulnerable applications you run yourself — OWASP Juice Shop, DVWA, WebGoat
+- Public bug-bounty programmes **whose scope explicitly permits automated scanning** — check the policy first, many forbid it
+
+If you deploy this where others can reach it, remember that scan traffic originates from *your* infrastructure. You will receive the abuse report, whoever typed the domain.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+Copyright © 2026 Devansh Patel
 
 ---
 
 <div align="center">
-
-**Built for authorized security testing.**
-
-[Danger Mode docs](docs/DANGER_MODE.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-
-<sub>ReconTitan © 2026 · Scan only what you are authorized to scan.</sub>
-
+<sub>Built by <a href="https://github.com/D3v4nshPat3l">Devansh Patel</a></sub>
 </div>
