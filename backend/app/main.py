@@ -175,7 +175,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host=settings.API_HOST,
         port=8000,
         server_header=False,   # ← hides "uvicorn" from Server header
         date_header=False,     # ← hides Date header (info leak)

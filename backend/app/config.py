@@ -147,7 +147,10 @@ class Settings:
         self.RATE_LIMIT_BLOCK_SECONDS = _env_int("RATE_LIMIT_BLOCK_SECONDS", 300, minimum=1)
 
         # API server / browser access
-        self.API_HOST = _env_str("API_HOST", "0.0.0.0")
+        # Every interface, because in a container the only route in is the
+        # port the runtime publishes. Override to 127.0.0.1 when running the
+        # process directly on a host that should not expose it.
+        self.API_HOST = _env_str("API_HOST", "0.0.0.0")  # nosec B104
         self.API_PORT = _env_int("API_PORT", 8000, minimum=1)
         self.CORS_ORIGINS = _origins_from_env()
         self.CORS_ALLOW_CREDENTIALS = (

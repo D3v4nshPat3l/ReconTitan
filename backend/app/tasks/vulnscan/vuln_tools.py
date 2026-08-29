@@ -147,9 +147,16 @@ def run_sqlmap_check(target: str) -> list[dict]:
                  "title":"SQLMap Not Installed",
                  "description":"Install: pip install sqlmap or https://github.com/sqlmapproject/sqlmap",
                  "evidence":""}]
-    raw = _run(["sqlmap","-u",f"{url}/?id=1","--batch","--level=1",
-                "--risk=1","--forms","--crawl=1","--output-dir","/tmp/sqlmap_rt"],
-               TIMEOUT_DEFAULT)
+    # A private directory per run: a fixed path under /tmp is world-writable,
+    # predictable enough to pre-create as a symlink, and shared by concurrent
+    # scans that would then overwrite each other's output.
+    output_dir = tempfile.mkdtemp(prefix="sqlmap_rt_")
+    try:
+        raw = _run(["sqlmap","-u",f"{url}/?id=1","--batch","--level=1",
+                    "--risk=1","--forms","--crawl=1","--output-dir",output_dir],
+                   TIMEOUT_DEFAULT)
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
     if "is vulnerable" in raw.lower() or "sql injection" in raw.lower():
         findings.append({
             "tool":"sqlmap","category":"injection","severity":"critical",

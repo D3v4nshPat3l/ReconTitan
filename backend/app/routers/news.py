@@ -196,7 +196,12 @@ async def _fetch_one(client: httpx.AsyncClient, source: dict) -> list[dict]:
             cat = _classify(title, summary, source["cat"])
             sev = _severity(title, summary)
             tags = _extract_tags(title)
-            uid  = hashlib.md5((title + link).encode()).hexdigest()[:12]
+            # A stable id for de-duplicating feed items across refreshes.
+            # Nothing authenticates on it, so collision resistance is not a
+            # security property here -- usedforsecurity=False says exactly that.
+            uid  = hashlib.md5(  # noqa: S324
+                (title + link).encode(), usedforsecurity=False
+            ).hexdigest()[:12]
 
             items.append({
                 "id":           uid,
