@@ -75,13 +75,49 @@ Notice what an honest scanner looks like: **Open Ports** says `Binary not instal
 
 ### The SOC console
 
-A separate, hardened application that shows who is using your deployment — every scan, every source address, every blocked attack, in IST.
+A separate, hardened application that answers one question the scanner cannot: **who is using your deployment?** Every scan, every source address, every blocked attack — with all timestamps in IST.
 
 <div align="center">
-<img src="docs/screenshots/soc-console.png" alt="ReconTitan SOC console showing threat events, traffic volume, attack classes and top hostile sources" width="100%">
+<img src="docs/screenshots/soc-console.png" alt="SOC console overview: threat events, injections blocked, auth failures, rate limiting, hourly traffic and attack classes" width="100%">
+<br><sub><b>Overview</b> — threat events, injections blocked, auth failures, rate-limited requests, failed console logins, and hostile-vs-normal traffic by hour</sub>
 </div>
 
-Threat events, injections blocked, auth failures, rate-limited requests, failed console logins, hostile-vs-normal traffic by hour, and a ranked list of the noisiest sources with their attack classes.
+<br>
+
+<div align="center">
+<img src="docs/screenshots/soc-detections.png" alt="Detections view showing a critical admin surface probing pattern" width="100%">
+<br><sub><b>Detections</b> — behavioural patterns rather than raw events. Each one states the evidence it fired on <i>and what it cannot distinguish</i></sub>
+</div>
+
+<br>
+
+<div align="center">
+<img src="docs/screenshots/soc-events.png" alt="Raw security event feed with IST timestamps, source addresses, methods and paths" width="100%">
+<br><sub><b>Event Feed</b> — every security-relevant request, newest first, filterable by kind and source address</sub>
+</div>
+
+<br>
+
+<div align="center">
+<img src="docs/screenshots/soc-devices.png" alt="Clients view listing everything reaching the deployment with user agents and request counts" width="100%">
+<br><sub><b>Clients</b> — grouped by address and self-reported headers. The caveat at the top is deliberate: these identify <i>traffic patterns</i>, not devices or people</sub>
+</div>
+
+<br>
+
+<div align="center">
+<img src="docs/screenshots/soc-threats.png" alt="Threat sources ranked by blocked volume" width="100%">
+<br><sub><b>Threats</b> — sources ranked by blocked volume, with the attack classes each one triggered</sub>
+</div>
+
+<br>
+
+<div align="center">
+<img src="docs/screenshots/soc-blocklist.png" alt="Blocklist with separate panels for blocked scan targets and blocked source addresses" width="100%">
+<br><sub><b>Blocklist</b> — two independent lists: hosts ReconTitan refuses to <i>scan</i>, and callers it refuses to <i>serve</i>. Blocking a domain covers its subdomains; sources accept single addresses or CIDR ranges</sub>
+</div>
+
+<br>
 
 <div align="center">
 <img src="docs/screenshots/soc-lock.png" alt="SOC console authentication screen" width="70%">
