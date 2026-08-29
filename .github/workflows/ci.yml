@@ -72,4 +72,5 @@ jobs:
           MONGO_USER: recontitan_app
           MONGO_PASS: ci-mongo-password
           MONGO_AUTH_SOURCE: recontitan
+          ADMIN_TOKEN: ci-admin-console-token-value-over-forty-characters-long
         run: docker compose config --quiet

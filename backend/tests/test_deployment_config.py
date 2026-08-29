@@ -302,3 +302,28 @@ def test_the_deadline_is_overridable(monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.setenv("MAX_SYNC_SCAN_SECONDS", "20")
     assert Settings().MAX_SYNC_SCAN_SECONDS == 20
+
+
+# ── CI covers every variable Compose demands ────────────────────────────────
+
+def test_ci_supplies_every_required_compose_variable():
+    """Compose fails closed on a missing required variable, which is the right
+    behaviour -- but it means adding a service with a new ${VAR:?} silently
+    breaks CI until the workflow is updated too. That is how the admin console
+    broke the build: the service was added, ADMIN_TOKEN was not.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent.parent
+    compose = (root / "docker-compose.yml").read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    required = set(re.findall(r"\$\{([A-Z_]+):\?", compose))
+    assert required, "expected Compose to declare required variables"
+
+    missing = sorted(name for name in required if f"{name}:" not in workflow)
+    assert not missing, (
+        f"docker-compose.yml requires {missing}, which the CI workflow never sets; "
+        "the Validate Compose configuration step will fail"
+    )
