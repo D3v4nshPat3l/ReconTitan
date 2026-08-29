@@ -1,0 +1,8 @@
+# Canonical identity for this repository's history.
+#
+# Commits arrive under two identities: the local git config, and the
+# noreply address GitHub attaches to commits authored through the web
+# interface. Both are the same person, and tools that honour .mailmap
+# (git shortlog, git log, GitHub's contributor graph) collapse them here.
+Devansh Patel <devanshmpatel982@gmail.com> <devanshmpatel982@gmail.com>
+Devansh Patel <devanshmpatel982@gmail.com> <147400702+D3v4nshPat3l@users.noreply.github.com>
