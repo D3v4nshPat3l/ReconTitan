@@ -14,5 +14,5 @@ httpx==0.28.1
 python-dotenv==1.2.2
 dnspython==2.8.0
 python-whois==0.9.6
-cryptography==49.0.0
+cryptography==50.0.1
 reportlab==5.0.0
