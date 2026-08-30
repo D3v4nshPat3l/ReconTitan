@@ -74,3 +74,7 @@ frontend/assets/*.png
 generated_secrets.txt
 admin_token.txt
 *_token.txt
+
+# Local editor/agent tooling. The UI/UX skill is 3.6MB of vendored
+# third-party data, not part of ReconTitan — install it per machine.
+.claude/skills/
