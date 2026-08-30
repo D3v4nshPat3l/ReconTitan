@@ -134,6 +134,20 @@ section { padding-block: var(--s9); }
   opacity: .5; pointer-events: none;
 }
 .hero .shell { position: relative; z-index: 1; }
+.hero-shell {
+  display: grid; align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+  column-gap: var(--s8);
+}
+.hero-copy { grid-column: 1; }
+.hero-visual { grid-column: 2; aspect-ratio: 1; min-height: 340px; }
+#globeCanvas { width: 100%; height: 100%; }
+/* Below this the globe becomes decoration competing for vertical space the
+   headline needs, so it is dropped rather than shrunk. */
+@media (max-width: 900px) {
+  .hero-shell { grid-template-columns: 1fr; }
+  .hero-visual { display: none; }
+}
 .hero h1 { max-width: min(16ch, 100%); }
 .hero h1 em { font-style: italic; color: var(--accent); }
 .hero-lede {
@@ -144,6 +158,7 @@ section { padding-block: var(--s9); }
 }
 .hero-actions { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s7); }
 .hero-stats {
+  grid-column: 1 / -1;
   display: flex; flex-wrap: wrap; gap: var(--s7);
   margin-top: var(--s9); padding-top: var(--s6);
   border-top: 1px solid var(--line-dark);

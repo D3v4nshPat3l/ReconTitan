@@ -37,7 +37,8 @@
 <!-- ═════════════════════ Hero ═════════════════════ -->
 <section class="hero" aria-label="Introduction">
   <canvas id="heroCanvas" aria-hidden="true"></canvas>
-  <div class="shell">
+  <div class="shell hero-shell">
+    <div class="hero-copy">
     <p class="eyebrow" style="color:rgba(255,255,255,.55)">External attack surface assessment</p>
     <h1>Everything A Domain Shows The Internet, <em>Written Up With The Evidence</em>.</h1>
     <p class="hero-lede">
@@ -49,6 +50,12 @@
       <a class="btn btn-accent" href="#scanner">Run a scan</a>
       <a class="btn btn-ghost" href="#capabilities">What it checks</a>
     </div>
+    </div>
+
+    <div class="hero-visual" aria-hidden="true">
+      <canvas id="globeCanvas"></canvas>
+    </div>
+
     <dl class="hero-stats">
       <div><dt id="moduleCount">25+</dt><dd>Checks across recon, OSINT and vulnerability phases</dd></div>
       <div><dt>20</dt><dd>Danger Mode stages, bounded and paced</dd></div>
@@ -236,6 +243,7 @@
   </div>
 </footer>
 
+<script src="globe.js?v=1" defer></script>
 <script src="dashboard.js?v=18"></script>
 </body>
 </html>
