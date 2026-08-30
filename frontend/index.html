@@ -3,225 +3,84 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="theme-color" content="#06070a">
+<meta name="theme-color" content="#000000">
 <title>ReconTitan — External Attack Surface Assessment</title>
 <meta name="description" content="Point ReconTitan at a domain you own. It enumerates subdomains, reviews TLS and headers, inspects JavaScript, matches technology versions to CVEs, and produces a report with evidence for every finding.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dashboard.css?v=17">
-<link rel="stylesheet" href="cinema.css?v=17">
-<link rel="stylesheet" href="news_extras.css?v=17">
+<link rel="stylesheet" href="theme.css?v=1">
 </head>
 <body>
 
-<!-- Shared SVG definitions. Declared once, referenced by every layer. -->
-<svg width="0" height="0" aria-hidden="true" style="position:absolute">
-  <defs>
-    <linearGradient id="wire" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#22d3ee"/>
-      <stop offset="55%" stop-color="#7c85ff"/>
-      <stop offset="100%" stop-color="#c084fc"/>
-    </linearGradient>
-    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#22d3ee" stop-opacity=".28"/>
-      <stop offset="70%" stop-color="#7c85ff" stop-opacity=".06"/>
-      <stop offset="100%" stop-color="#7c85ff" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="gridFade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0"/>
-      <stop offset="45%" stop-color="#22d3ee" stop-opacity=".30"/>
-      <stop offset="100%" stop-color="#7c85ff" stop-opacity=".05"/>
-    </linearGradient>
-    <!-- Towers sit in shadow and catch a little rim light from the horizon. -->
-    <linearGradient id="towerBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#141c2b"/>
-      <stop offset="100%" stop-color="#080b12"/>
-    </linearGradient>
-    <linearGradient id="analystBody" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0d1220"/>
-      <stop offset="100%" stop-color="#05070c"/>
-    </linearGradient>
-  </defs>
-</svg>
+<div class="announce">Authorized testing only — scan what you own or hold written permission to assess</div>
 
 <header class="topbar">
-  <a class="brand" href="/" aria-label="ReconTitan home">
-    <span class="brand-mark" aria-hidden="true"></span>
-    ReconTitan
-    <span class="version" id="versionPill">v0.5.0</span>
-  </a>
-  <nav class="nav" aria-label="Primary">
-    <a href="#scanner" class="nav-link is-current">Scan</a>
-    <a href="#capabilities" class="nav-link">What it checks</a>
-    <a href="#news-section" class="nav-link">Feed</a>
-    <a href="/api/docs" target="_blank" rel="noopener noreferrer" class="nav-link">API</a>
-  </nav>
+  <div class="topbar-inner">
+    <a class="brand" href="/" aria-label="ReconTitan home">
+      <span class="brand-mark" aria-hidden="true"></span>
+      ReconTitan
+      <span class="version" id="versionPill">v0.5.0</span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#scanner" class="nav-link is-current">Scan</a>
+      <a href="#capabilities" class="nav-link">What it checks</a>
+      <a href="#news-section" class="nav-link">Feed</a>
+      <a href="/api/docs" target="_blank" rel="noopener noreferrer" class="nav-link">API</a>
+    </nav>
+  </div>
 </header>
 
 <main>
 
-<!-- ═════════════════════ Cinematic stage ═════════════════════ -->
-<section class="cinema" aria-label="ReconTitan introduction">
-  <div class="stage">
-
-    <!-- Painted layers. Art lives in frontend/assets/; see the README there
-         for the filenames and why each composites the way it does. -->
-    <div class="layer layer-art layer-backdrop" aria-hidden="true"></div>
-
-    <!-- Perspective floor grid stays geometric so it lines up with the horizon -->
-    <div class="layer layer-grid" aria-hidden="true">
-      <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" width="100%" height="100%">
-        <g stroke="url(#gridFade)" stroke-width="1" fill="none">
-          <path d="M-200 900 L800 470M0 900 L800 470M200 900 L800 470M400 900 L800 470M600 900 L800 470M800 900 L800 470M1000 900 L800 470M1200 900 L800 470M1400 900 L800 470M1600 900 L800 470M1800 900 L800 470"/>
-          <path d="M0 470h1600M0 500h1600M0 540h1600M0 592h1600M0 660h1600M0 748h1600M0 860h1600"/>
-        </g>
-      </svg>
+<!-- ═════════════════════ Hero ═════════════════════ -->
+<section class="hero" aria-label="Introduction">
+  <canvas id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="shell">
+    <p class="eyebrow" style="color:rgba(255,255,255,.55)">External attack surface assessment</p>
+    <h1>Everything A Domain Shows The Internet, <em>Written Up With The Evidence</em>.</h1>
+    <p class="hero-lede">
+      Subdomains from certificate logs. Frameworks and versions from response
+      headers. Endpoints from bundled JavaScript. Enumerated, checked against
+      known weaknesses, and reported with the proof behind every claim.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-accent" href="#scanner">Run a scan</a>
+      <a class="btn btn-ghost" href="#capabilities">What it checks</a>
     </div>
-
-    <!-- Range rings -->
-    <div class="layer layer-rings" aria-hidden="true">
-      <svg viewBox="0 0 800 800">
-        <g fill="none" stroke="url(#wire)" stroke-width="1">
-          <circle cx="400" cy="400" r="150" stroke-opacity=".45"/>
-          <circle cx="400" cy="400" r="240" stroke-opacity=".3"/>
-          <circle cx="400" cy="400" r="330" stroke-opacity=".2" stroke-dasharray="3 9"/>
-          <circle cx="400" cy="400" r="392" stroke-opacity=".12" stroke-dasharray="1 14"/>
-        </g>
-      </svg>
-    </div>
-
-    <div class="layer layer-art layer-skyline" aria-hidden="true"></div>
-    <div class="layer layer-scan" aria-hidden="true"></div>
-    <div class="layer layer-art layer-deep" aria-hidden="true"></div>
-    <div class="layer layer-art layer-analyst" aria-hidden="true"></div>
-
-    <!-- Core: one image, cut down the middle by clip-path -->
-    <div class="core" aria-hidden="true">
-      <div class="core-piece core-whole"></div>
-      <div class="core-piece core-half core-half-l"></div>
-      <div class="core-piece core-half core-half-r"></div>
-    </div>
-
-    <div class="layer layer-art layer-pylons" aria-hidden="true"></div>
-
-    <div class="wash" aria-hidden="true"></div>
-
-    <h1 class="cinema-title">RECON<em>TITAN</em></h1>
-
-    <div class="cinema-lede">
-      <p>Everything a domain shows the internet — enumerated, checked against
-         known weaknesses, and written up with the evidence behind it.</p>
-      <div class="cinema-tags">
-        <span>subdomains</span><span>TLS</span><span>headers</span><span>CVEs</span><span>takeover</span>
-      </div>
-    </div>
-
-    <section class="stage-panel panel-one" aria-label="Attack surface">
-      <h2>A host tells you more than it means to.</h2>
-      <p>Certificate logs name subdomains nobody documented. Response headers name
-         the framework and its version. Bundled JavaScript names the endpoints.
-         ReconTitan reads all of it before sending a single intrusive request.</p>
-      <dl class="stage-facts">
-        <div><dt>30+</dt><dd>Checks across recon, OSINT, and vulnerability phases</dd></div>
-        <div><dt>0</dt><dd>Findings without the evidence they came from</dd></div>
-      </dl>
-    </section>
-
-    <section class="stage-panel panel-two" aria-label="Evidence">
-      <h2>Every finding carries its proof.</h2>
-      <p>Versions are matched to CVEs by CPE range, not keyword text. Dangling
-         CNAMEs are reported only where NXDOMAIN or a provider fingerprint
-         confirms them. Anything inferred rather than proven says so.</p>
-    </section>
-
-    <!-- Capability rail -->
-    <section class="rail" aria-label="Capabilities">
-      <div class="rail-track">
-        <article class="rail-card" tabindex="0" role="button" aria-label="Subdomain takeover">
-          <span class="rail-kicker">Attack surface</span>
-          <svg class="rail-glyph" viewBox="0 0 48 48" fill="none" stroke="url(#wire)" stroke-width="1.5" aria-hidden="true">
-            <path d="M24 4 6 13v13c0 11 7.6 17.8 18 21 10.4-3.2 18-10 18-21V13L24 4Z"/><path d="M17 24l5 5 10-10"/>
-          </svg>
-          <h3>Subdomain takeover</h3>
-          <p>Dangling CNAMEs matched to provider fingerprints, reported only on confirmed evidence.</p>
-        </article>
-        <article class="rail-card" tabindex="0" role="button" aria-label="JavaScript inspection">
-          <span class="rail-kicker">Client security</span>
-          <svg class="rail-glyph" viewBox="0 0 48 48" fill="none" stroke="url(#wire)" stroke-width="1.5" aria-hidden="true">
-            <path d="M17 15 7 24l10 9M31 15l10 9-10 9M27 10 21 38"/>
-          </svg>
-          <h3>JavaScript inspection</h3>
-          <p>Bundled assets read for endpoints, risky sinks, and source maps. Secrets hashed, never stored.</p>
-        </article>
-        <article class="rail-card" tabindex="0" role="button" aria-label="Version and CVE matching">
-          <span class="rail-kicker">Vulnerabilities</span>
-          <svg class="rail-glyph" viewBox="0 0 48 48" fill="none" stroke="url(#wire)" stroke-width="1.5" aria-hidden="true">
-            <circle cx="21" cy="21" r="14"/><path d="M31 31l11 11"/>
-          </svg>
-          <h3>Version and CVE matching</h3>
-          <p>Detected software matched to CVE records by CPE version range rather than keyword text.</p>
-        </article>
-        <article class="rail-card" tabindex="0" role="button" aria-label="TLS and headers">
-          <span class="rail-kicker">Configuration</span>
-          <svg class="rail-glyph" viewBox="0 0 48 48" fill="none" stroke="url(#wire)" stroke-width="1.5" aria-hidden="true">
-            <rect x="10" y="21" width="28" height="20" rx="4"/><path d="M17 21v-6a7 7 0 0 1 14 0v6"/>
-          </svg>
-          <h3>TLS and headers</h3>
-          <p>Certificate validity, protocol and cipher, and the headers a browser falls back on without.</p>
-        </article>
-        <article class="rail-card" tabindex="0" role="button" aria-label="Asset correlation">
-          <span class="rail-kicker">Correlation</span>
-          <svg class="rail-glyph" viewBox="0 0 48 48" fill="none" stroke="url(#wire)" stroke-width="1.5" aria-hidden="true">
-            <circle cx="16" cy="16" r="7"/><circle cx="32" cy="32" r="7"/><path d="M21 21l6 6"/>
-          </svg>
-          <h3>Asset correlation</h3>
-          <p>Favicons hashed three ways, including Shodan-compatible MurmurHash3, to find related hosts.</p>
-        </article>
-        <article class="rail-card" tabindex="0" role="button" aria-label="Reporting">
-          <span class="rail-kicker">Reporting</span>
-          <svg class="rail-glyph" viewBox="0 0 48 48" fill="none" stroke="url(#wire)" stroke-width="1.5" aria-hidden="true">
-            <path d="M12 6h16l8 8v28H12z"/><path d="M28 6v8h8M19 26h10M19 33h10"/>
-          </svg>
-          <h3>Reporting</h3>
-          <p>Severity-ranked PDF with methodology, remediation, and an explicit statement of what was not covered.</p>
-        </article>
-      </div>
-    </section>
-
-    <div class="rail-controls" aria-label="Rail controls">
-      <button class="rail-nav rail-prev" type="button" aria-label="Previous capability">&#8592;</button>
-      <button class="rail-nav rail-next" type="button" aria-label="Next capability">&#8594;</button>
-    </div>
-
-    <div class="scroll-hint" aria-hidden="true"><i></i> Scroll</div>
+    <dl class="hero-stats">
+      <div><dt id="moduleCount">25+</dt><dd>Checks across recon, OSINT and vulnerability phases</dd></div>
+      <div><dt>20</dt><dd>Danger Mode stages, bounded and paced</dd></div>
+      <div><dt>0</dt><dd>Findings without the evidence they came from</dd></div>
+    </dl>
   </div>
 </section>
 
 <!-- ═════════════════════ Scanner ═════════════════════ -->
-<section class="hero" id="scanner">
+<section class="scanner" id="scanner">
   <div class="shell">
-    <div class="hero-grid">
+    <div class="scan-grid">
 
-      <div class="hero-copy">
-        <h2 class="hero-h">Run a scan</h2>
-        <p class="lede">
-          Enter a domain or IP you own. Recon and OSINT phases are passive; the
-          vulnerability phase is bounded and non-destructive.
+      <div class="scan-copy">
+        <p class="eyebrow">Start here</p>
+        <h2>Run a scan</h2>
+        <p>
+          Enter a domain or IP you own. The recon and OSINT phases are passive;
+          the vulnerability phase is bounded and non-destructive.
         </p>
         <p class="authorization">
-          Scan only what you own or hold written permission to assess. Private and
-          non-routable addresses are refused.
+          Private and non-routable addresses are refused. Danger Mode requires a
+          typed authorization before a single active probe is sent.
         </p>
       </div>
 
-      <div class="hero-form">
+      <div class="scan-form">
         <div class="field">
           <label for="targetInput">Target</label>
           <div class="field-row">
             <input id="targetInput" type="text" placeholder="example.com" autocomplete="off" spellcheck="false">
-            <button class="btn-primary" id="scanBtn" type="button">
+            <button class="btn btn-primary" id="scanBtn" type="button">
               <span class="btn-label">Run scan</span>
               <span class="btn-spinner" aria-hidden="true"></span>
             </button>
@@ -230,32 +89,33 @@
 
         <fieldset class="profiles" id="profileGrid" role="radiogroup" aria-label="Scan profile">
           <legend>Profile</legend>
-
-          <button class="profile active" type="button" data-profile="full" role="radio" aria-checked="true">
-            <span class="profile-name">Full</span>
-            <span class="profile-desc">Recon, OSINT, and bounded vulnerability checks</span>
-            <span class="profile-time">~90s</span>
-          </button>
-          <button class="profile" type="button" data-profile="recon_only" role="radio" aria-checked="false">
-            <span class="profile-name">Recon</span>
-            <span class="profile-desc">DNS, certificates, archives, infrastructure</span>
-            <span class="profile-time">~30s</span>
-          </button>
-          <button class="profile" type="button" data-profile="osint_only" role="radio" aria-checked="false">
-            <span class="profile-name">Web &amp; OSINT</span>
-            <span class="profile-desc">Headers, TLS, JavaScript, takeover, fingerprints</span>
-            <span class="profile-time">~25s</span>
-          </button>
-          <button class="profile" type="button" data-profile="vuln_only" role="radio" aria-checked="false">
-            <span class="profile-name">Vulnerabilities</span>
-            <span class="profile-desc">Exposed ports and version-matched CVE candidates</span>
-            <span class="profile-time">~60s</span>
-          </button>
-          <button class="profile profile-restricted" type="button" data-profile="danger" role="radio" aria-checked="false">
-            <span class="profile-name">Danger mode<span class="lock" aria-hidden="true">Locked</span></span>
-            <span class="profile-desc">Active penetration-test simulation. Requires explicit authorization.</span>
-            <span class="profile-time">3–6 min</span>
-          </button>
+          <div class="profile-list">
+            <button class="profile active" type="button" data-profile="full" role="radio" aria-checked="true">
+              <span class="profile-name">Full</span>
+              <span class="profile-time">60–120s</span>
+              <span class="profile-desc">Recon, OSINT, and bounded vulnerability checks</span>
+            </button>
+            <button class="profile" type="button" data-profile="recon_only" role="radio" aria-checked="false">
+              <span class="profile-name">Recon</span>
+              <span class="profile-time">20–55s</span>
+              <span class="profile-desc">DNS, certificates, archives, infrastructure</span>
+            </button>
+            <button class="profile" type="button" data-profile="osint_only" role="radio" aria-checked="false">
+              <span class="profile-name">Web &amp; OSINT</span>
+              <span class="profile-time">10–25s</span>
+              <span class="profile-desc">Headers, TLS, JavaScript, takeover, fingerprints</span>
+            </button>
+            <button class="profile" type="button" data-profile="vuln_only" role="radio" aria-checked="false">
+              <span class="profile-name">Vulnerabilities</span>
+              <span class="profile-time">5–15s</span>
+              <span class="profile-desc">Exposed ports and version-matched CVE candidates</span>
+            </button>
+            <button class="profile profile-restricted" type="button" data-profile="danger" role="radio" aria-checked="false">
+              <span class="profile-name">Danger mode<span class="lock" aria-hidden="true">Locked</span></span>
+              <span class="profile-time">3–6 min</span>
+              <span class="profile-desc">Active penetration-test simulation. Requires explicit authorization.</span>
+            </button>
+          </div>
         </fieldset>
 
         <!-- Deliberately heavy. It is the last thing between a click and real
@@ -303,8 +163,9 @@
 <section class="checks" id="capabilities">
   <div class="shell">
     <header class="section-head">
+      <p class="eyebrow">Coverage</p>
       <h2>What a scan actually looks at</h2>
-      <p>Each check is deterministic Python. Findings carry the evidence they were derived from, and anything inferred rather than proven is labelled as a candidate.</p>
+      <p>Each check is deterministic Python. Findings carry the evidence they were derived from, and anything inferred rather than proven is labelled a candidate.</p>
     </header>
 
     <div class="checks-grid">
@@ -335,7 +196,6 @@
     </div>
 
     <p class="checks-note">
-      <span id="moduleCount">20+</span> checks available on this deployment ·
       <span id="hsScans">0</span> scans run from this browser ·
       <a href="/api/capabilities" target="_blank" rel="noopener noreferrer">machine-readable capabilities</a>
     </p>
@@ -347,8 +207,8 @@
   <div class="shell">
     <header class="section-head section-head-row">
       <div>
+        <p class="eyebrow">Intelligence</p>
         <h2>Security feed</h2>
-        <p>Recent disclosure and threat reporting, refreshed periodically.</p>
       </div>
       <div class="feed-filters">
         <button class="ncat active" data-cat="all">All</button>
@@ -370,13 +230,12 @@
     <span>ReconTitan — authorized testing only.</span>
     <span class="footer-links">
       <a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener noreferrer">OWASP Top 10</a>
-      <a href="https://github.com/D3v4nshPat3l" target="_blank" rel="noopener noreferrer">Source</a>
+      <a href="https://github.com/D3v4nshPat3l/ReconTitan" target="_blank" rel="noopener noreferrer">Source</a>
       <a href="/api/health">Status</a>
     </span>
   </div>
 </footer>
 
-<script src="cinema.js?v=17" defer></script>
-<script src="dashboard.js?v=17"></script>
+<script src="dashboard.js?v=18"></script>
 </body>
 </html>
