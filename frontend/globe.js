@@ -77,12 +77,30 @@
     return { x: p.x * c - p.z * s, y: p.y, z: p.x * s + p.z * c };
   }
 
-  // Fixed tilt, so the poles are never dead-on and the sphere reads as 3D.
+  // Base tilt, so the poles are never dead-on and the sphere reads as 3D.
+  // The pointer nudges it a little either side of that, which is what makes
+  // the globe feel like an object in the page rather than a looping GIF.
   const TILT = -0.42;
+  const TILT_RANGE = 0.30;      // radians of pointer influence, kept small
+  const YAW_RANGE = 0.34;
+  let tiltNow = TILT, tiltWant = TILT;
+  let yawNow = 0, yawWant = 0;
+
   function tilt(p) {
-    const s = Math.sin(TILT), c = Math.cos(TILT);
+    const s = Math.sin(tiltNow), c = Math.cos(tiltNow);
     return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c };
   }
+
+  // Pointer position drives the target; `draw` eases toward it, so the globe
+  // follows with weight instead of snapping to the cursor.
+  window.addEventListener('pointermove', (event) => {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width) return;
+    const nx = (event.clientX - (r.left + r.width / 2)) / (window.innerWidth / 2);
+    const ny = (event.clientY - (r.top + r.height / 2)) / (window.innerHeight / 2);
+    yawWant = Math.max(-1, Math.min(1, nx)) * YAW_RANGE;
+    tiltWant = TILT + Math.max(-1, Math.min(1, ny)) * TILT_RANGE;
+  }, { passive: true });
 
   // ── Sizing ──────────────────────────────────────────────────────────────
   let W = 0, H = 0, R = 0, cx = 0, cy = 0, dpr = 1;
@@ -129,8 +147,8 @@
     ctx.lineWidth = 1;
     for (const ring of RINGS) {
       for (let i = 0; i < ring.length - 1; i++) {
-        const p1 = project(tilt(rotateY(ring[i], spin)));
-        const p2 = project(tilt(rotateY(ring[i + 1], spin)));
+        const p1 = project(tilt(rotateY(ring[i], spin + yawNow)));
+        const p2 = project(tilt(rotateY(ring[i + 1], spin + yawNow)));
         const d = (p1.depth + p2.depth) / 2;
         const alpha = 0.07 + 0.23 * ((d + 1) / 2);   // far side stays visible, faintly
         ctx.strokeStyle = 'rgba(' + INK_LINE + ',' + alpha.toFixed(3) + ')';
@@ -143,8 +161,8 @@
 
     // Links, lifted above the surface along the midpoint normal.
     for (const link of LINKS) {
-      const a = tilt(rotateY(link.a, spin));
-      const b = tilt(rotateY(link.b, spin));
+      const a = tilt(rotateY(link.a, spin + yawNow));
+      const b = tilt(rotateY(link.b, spin + yawNow));
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
       const len = Math.hypot(mid.x, mid.y, mid.z) || 1;
       const lift = 1.22;
@@ -165,7 +183,7 @@
     // Hosts. Ones on the near side get a pulse; the sweep brightens whatever
     // it is currently passing over, which is the scan reading the surface.
     for (const host of HOSTS) {
-      const p3 = tilt(rotateY(host.base, spin));
+      const p3 = tilt(rotateY(host.base, spin + yawNow));
       const p = project(p3);
       if (p3.z < -0.55) continue;
       const near = (p3.z + 1) / 2;
@@ -194,7 +212,7 @@
     const ringPts = [];
     for (let s = 0; s <= 72; s++) {
       const lon = (s / 72) * Math.PI * 2;
-      ringPts.push(project(tilt(rotateY(onSphere(0, lon), spin))));
+      ringPts.push(project(tilt(rotateY(onSphere(0, lon), spin + yawNow))));
     }
     for (let i = 0; i < ringPts.length - 1; i++) {
       const p1 = ringPts[i], p2 = ringPts[i + 1];
@@ -206,6 +224,11 @@
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
     }
+
+    // Ease toward the pointer target. The 0.06 factor is the weight: high
+    // enough to feel responsive, low enough that the globe never snaps.
+    tiltNow += (tiltWant - tiltNow) * 0.06;
+    yawNow  += (yawWant - yawNow) * 0.06;
 
     spin += dt * 0.00016;
     sweep += dt * 0.0009;
