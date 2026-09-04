@@ -162,6 +162,7 @@ Work through this before exposing anything publicly.
 - [ ] `ADMIN_TOKEN` set and the admin port **not** published publicly (loopback + SSH tunnel)
 - [ ] `AUDIT_ENABLED=true` so scans are attributable
 - [ ] `NVD_API_KEY` set — without one, rate limiting produces 403s that look identical to "no CVEs found"
+- [ ] If `EMAIL_ALERTS_ENABLED=true`: configure `SMTP_HOST`, `SMTP_FROM`, and `ALERT_EMAIL_RECIPIENTS`; use a dedicated SMTP credential and leave the setting `false` until those are ready
 - [ ] `API_ACCESS_KEYS` instead of one shared key, if more than one consumer
 - [ ] Backups configured for the `mongo_data` volume
 

@@ -45,6 +45,27 @@ def test_production_rejects_default_domain_and_secret(monkeypatch):
     assert "SECRET_KEY" in message
 
 
+def test_production_rejects_incomplete_enabled_email_alerts(monkeypatch):
+    _safe_settings(monkeypatch)
+    monkeypatch.setenv("EMAIL_ALERTS_ENABLED", "true")
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    monkeypatch.delenv("SMTP_FROM", raising=False)
+    monkeypatch.delenv("ALERT_EMAIL_RECIPIENTS", raising=False)
+    settings = Settings()
+    with pytest.raises(RuntimeError, match="EMAIL_ALERTS_ENABLED requires"):
+        settings.validate_production()
+
+
+def test_production_accepts_complete_enabled_email_alerts(monkeypatch):
+    _safe_settings(monkeypatch)
+    monkeypatch.setenv("EMAIL_ALERTS_ENABLED", "true")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_FROM", "alerts@example.com")
+    monkeypatch.setenv("ALERT_EMAIL_RECIPIENTS", "security@example.com")
+    settings = Settings()
+    settings.validate_production()
+
+
 def test_database_urls_escape_credentials(monkeypatch):
     monkeypatch.setenv("REDIS_PASSWORD", "p@ss/word")
     monkeypatch.setenv("MONGO_USER", "app@user")

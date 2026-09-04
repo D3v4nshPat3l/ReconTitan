@@ -214,6 +214,25 @@ class Settings:
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
         self.OPENAI_MODEL = _env_str("OPENAI_MODEL", "gpt-4o-mini")
 
+        # Scan alerts are deliberately opt-in. Recipient addresses live only in
+        # server configuration, never in a browser request, so the scan API
+        # cannot be used as an open email relay.
+        self.EMAIL_ALERTS_ENABLED = _env_bool("EMAIL_ALERTS_ENABLED", False)
+        self.ALERT_EMAIL_RECIPIENTS = [
+            address.strip() for address in os.getenv("ALERT_EMAIL_RECIPIENTS", "").split(",")
+            if address.strip()
+        ]
+        self.SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+        self.SMTP_PORT = _env_int("SMTP_PORT", 587, minimum=1)
+        self.SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
+        self.SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+        self.SMTP_FROM = os.getenv("SMTP_FROM", "").strip()
+        self.SMTP_USE_TLS = _env_bool("SMTP_USE_TLS", True)
+        self.SMTP_TIMEOUT_SECONDS = _env_int("SMTP_TIMEOUT_SECONDS", 15, minimum=1)
+        self.ALERT_MIN_SEVERITY = _env_str("ALERT_MIN_SEVERITY", "high").lower()
+        if self.ALERT_MIN_SEVERITY not in {"critical", "high"}:
+            raise RuntimeError("ALERT_MIN_SEVERITY must be 'high' or 'critical'")
+
         # Keyless third-party lookups that receive the target address.
         #
         # api.hackertarget.com was called unconditionally by the port scan
@@ -508,6 +527,15 @@ class Settings:
             errors.append("SECRET_KEY must be a random value of at least 32 characters")
         if self.CORS_ORIGINS == ["*"]:
             errors.append("CORS_ORIGINS cannot be '*' in production")
+        if self.EMAIL_ALERTS_ENABLED:
+            missing = [name for name, value in (
+                ("SMTP_HOST", self.SMTP_HOST), ("SMTP_FROM", self.SMTP_FROM),
+                ("ALERT_EMAIL_RECIPIENTS", self.ALERT_EMAIL_RECIPIENTS),
+            ) if not value]
+            if missing:
+                errors.append("EMAIL_ALERTS_ENABLED requires " + ", ".join(missing))
+            if bool(self.SMTP_USERNAME) != bool(self.SMTP_PASSWORD):
+                errors.append("set both SMTP_USERNAME and SMTP_PASSWORD, or neither")
         # Production must be authenticated, but it no longer matters *which*
         # variable supplies the credential -- a deployment using only named keys
         # is fully configured and must not be told to set API_ACCESS_KEY.

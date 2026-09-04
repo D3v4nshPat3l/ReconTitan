@@ -298,6 +298,10 @@ def _scan_events(http_request: Request, target: str, scan_type: ScanType):
     if danger_session is not None:
         payload["danger_summary"] = danger_session.summary().model_dump(mode="json")
 
+    # Email delivery is best-effort and cannot change the completed scan result.
+    from app.services.alerts import send_scan_alert
+    send_scan_alert(payload)
+
     audit.record_scan_event(
         audit.SCAN_ACCEPTED, http_request,
         scan_id=scan_id, target=target, scan_type=scan_type.value,

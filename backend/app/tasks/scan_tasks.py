@@ -260,6 +260,12 @@ def run_ai_analysis(self, scan_id: str):
         scan_id, "completed", phase="ai_analysis", progress=100,
         tools_completed=["ai_report"], tools_running=[], completed=True,
     )
+    if db is not None:
+        # The report is persisted before alerting, so a recipient can review it
+        # even if SMTP is temporarily unavailable.
+        from app.services.alerts import send_scan_alert
+        report = db["scans"].find_one({"scan_id": scan_id}, {"_id": 0}) or {}
+        send_scan_alert(report)
     return {"phase": "ai_analysis", "status": "complete", "ai_summary": ai_summary}
 
 

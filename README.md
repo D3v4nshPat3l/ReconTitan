@@ -276,11 +276,34 @@ Everything is environment variables; [`.env.example`](.env.example) is the annot
 | `API_ACCESS_KEY` | *(empty)* | Set it and every `/api/` route needs `X-ReconTitan-Key` |
 | `ALLOW_DANGER_MODE` | `true` | Master switch for active testing |
 | `AI_PROVIDER` | `auto` | `auto`, `ollama`, `openai`, or `none` |
+| `EMAIL_ALERTS_ENABLED` | `false` | Send a server-side email when a scan reaches the alert threshold |
+| `ALERT_MIN_SEVERITY` | `high` | `high` or `critical`; lower-severity findings never trigger an alert |
+| `ALERT_EMAIL_RECIPIENTS` | *(empty)* | Comma-separated, operator-configured recipients; never accepted from the browser |
 | `NMAP_DEEP_SCAN` | `false` | Deep port scan + NSE scripts. See below |
 | `NMAP_DEEP_PORTS` | `1-10000` | TCP range a deep scan covers. Any nmap `-p` expression |
 | `NMAP_DEEP_SCRIPTS` | *(50 scripts)* | NSE scripts a deep scan runs. Any nmap `--script` expression |
 
 > `DOMAIN` and `CORS_ORIGINS` look inconsistent on purpose. `DOMAIN` is a hostname for Host-header matching; `CORS_ORIGINS` is a browser origin and must carry `https://`.
+
+### Scan alerts
+
+Desktop notifications are optional per browser. Enable **Notify this device** on the scan screen and accept the browser permission prompt; ReconTitan then notifies only for high or critical findings. The choice is stored only in that browser.
+
+Email alerts are disabled by default. Configure SMTP only in the server's `.env`, then restart the API and worker:
+
+```ini
+EMAIL_ALERTS_ENABLED=true
+ALERT_MIN_SEVERITY=high
+ALERT_EMAIL_RECIPIENTS=security@example.com,oncall@example.com
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=ReconTitan Alerts <alerts@example.com>
+SMTP_USE_TLS=true
+```
+
+The email contains severity counts and up to ten finding titles—not raw evidence or scanner output. If mail delivery fails, the scan still completes and the failure is recorded only in server logs.
 
 ### Deep port scanning
 

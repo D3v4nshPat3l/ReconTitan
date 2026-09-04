@@ -16,6 +16,7 @@ All notable ReconTitan changes are documented here.
 
 ### Added
 
+- Opt-in desktop notifications for high/critical scan findings, plus administrator-configured SMTP alerts. Email recipients are only accepted from server configuration, alerts include titles rather than evidence, and delivery errors never fail a scan.
 - Findings Explorer in the interactive report: case-insensitive multi-word search across recorded evidence, severity and scanner filters, severity ordering, and 25-result pagination. Results open the existing finding-detail modal and refresh after per-tool rescans. Filters do not change report cards or exports.
 - Automated explorer query and DOM-controller tests, run in CI with Node's built-in test runner.
 
