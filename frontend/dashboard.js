@@ -210,22 +210,32 @@ async function runSynchronousFallback(target, profile, reason = '') {
   activeScanId = '';
   cancelScanBtn.hidden = true;
   if (reason) addLog(`Queue unavailable: ${reason}`);
-  addLog('Running compatibility scan in this request; live per-tool status is unavailable.');
+  addLog('Running local scan with live check-by-check progress. Percentage measures completed steps, not remaining time.');
   const startedAt = Date.now();
-  setProgress(5, 'Compatibility scan running...');
-  const elapsedTicker = window.setInterval(() => {
+  let percent = 0;
+  let phase = 'Connecting to scan...';
+  const refreshProgress = () => {
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
-    setProgress(5, `Compatibility scan running... (${elapsed}s)`);
-  }, 1000);
+    setProgress(percent, `${phase} (${elapsed}s)`);
+  };
+  refreshProgress();
+  const elapsedTicker = window.setInterval(refreshProgress, 1000);
 
-  let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(profile)}`;
+  let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(profile)}&stream=true`;
   if (profile === 'danger') {
     url += `&danger_acknowledgement=${encodeURIComponent(DANGER_PHRASE)}`;
   }
   try {
     const response = await apiFetch(url);
     if (!response.ok) throw new Error(await responseError(response));
-    return normalizeReportData(await response.json());
+    return normalizeReportData(await ScanProgress.read(response, event => {
+      percent = event.progress;
+      phase = event.phase;
+      refreshProgress();
+      if (event.tool) {
+        addLog(`${event.phase}${event.status === 'ok' ? ` — ${event.findings} finding(s)` : ''}`);
+      }
+    }));
   } finally {
     window.clearInterval(elapsedTicker);
   }

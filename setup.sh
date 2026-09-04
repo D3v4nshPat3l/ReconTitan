@@ -9,7 +9,7 @@
 #  system-wide without asking first, and nothing outside this folder is
 #  modified.
 #
-#  Undo it all with ./uninstall.sh
+#  Undo it all with bash uninstall.sh
 # =============================================================================
 set -u
 
@@ -122,19 +122,27 @@ esac
 {
   echo "# ReconTitan install manifest - what setup.sh created, for uninstall.sh"
   echo "# Created: $(date)"
-} > "$MANIFEST"
+} >> "$MANIFEST" || fail "Cannot write the install record. Check folder permissions."
 
 # --- 1. Python ---------------------------------------------------------------
 step " [1/6] Checking for Python"
 
-PY_CMD=""
-for candidate in python3 python; do
-  if command -v "$candidate" >/dev/null 2>&1; then
-    if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>/dev/null; then
-      PY_CMD="$candidate"; break
-    fi
+find_python() {
+  PY_CMD=""
+  local candidate brew_prefix=""
+  if [ "$OS" = "macos" ] && command -v brew >/dev/null 2>&1; then
+    brew_prefix="$(brew --prefix python@3.12 2>/dev/null || true)"
   fi
-done
+  for candidate in "$VENV/bin/python" "${brew_prefix}/bin/python3.12" python3 python python3.12 python3.11 python3.13 python3.14; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      if "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' 2>/dev/null; then
+        PY_CMD="$candidate"; return 0
+      fi
+    fi
+  done
+  return 1
+}
+find_python || true
 
 if [ -n "$PY_CMD" ]; then
   good "Found: $("$PY_CMD" --version 2>&1)  (command: $PY_CMD)"
@@ -154,7 +162,14 @@ else
       fail "Homebrew is not installed. Install Python from https://www.python.org/downloads/ then run this again."
     fi
   elif command -v apt-get >/dev/null 2>&1; then
-    INSTALL_CMD="sudo apt-get update && sudo apt-get install -y python3 python3-venv python3-pip"
+    # Never silently install an unsupported default (Ubuntu 22.04 uses 3.10).
+    for version in 3.12 3.11; do
+      if apt-cache policy "python$version" 2>/dev/null | awk '/Candidate:/ { if ($2 != "(none)") found=1 } END { exit !found }'; then
+        INSTALL_CMD="sudo apt-get update && sudo apt-get install -y python$version python$version-venv"
+        break
+      fi
+    done
+    [ -n "$INSTALL_CMD" ] || fail "Your apt repositories do not offer Python 3.11+. Install a supported Python yourself or use Docker Compose. No third-party repositories were added."
   elif command -v dnf >/dev/null 2>&1; then
     INSTALL_CMD="sudo dnf install -y python3 python3-pip"
   elif command -v pacman >/dev/null 2>&1; then
@@ -179,10 +194,8 @@ else
   echo "PYTHON_INSTALLED_BY_SETUP=1" >> "$MANIFEST"
   echo "PYTHON_INSTALL_CMD=$INSTALL_CMD" >> "$MANIFEST"
 
-  for candidate in python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1; then PY_CMD="$candidate"; break; fi
-  done
-  [ -n "$PY_CMD" ] || fail "Python still not found after install. Open a new terminal and run this again."
+  hash -r
+  find_python || fail "Python 3.11+ still not found after install. Open a new terminal, check PATH, and run this again."
   good "Installed: $("$PY_CMD" --version 2>&1)"
 fi
 
@@ -190,8 +203,10 @@ fi
 step " [2/6] Creating the private Python environment"
 
 if [ -x "$VENV/bin/python" ]; then
+  "$VENV/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)' || fail "Existing .venv needs Python 3.11+. Rename it before rerunning; it was not modified."
   info "Already exists, reusing it: .venv/"
 else
+  [ ! -e "$VENV" ] || fail "Existing .venv is incomplete or belongs to another OS. Rename it before rerunning; it was not overwritten."
   info "Creating: .venv/"
   info "A virtual environment keeps this project's packages separate from your"
   info "system Python, so nothing here can break your other projects."
@@ -208,7 +223,7 @@ info "These go inside .venv only. Your system Python is untouched."
 info "Reading the list from: backend/requirements.txt"
 say ""
 
-"$VPY" -m pip install --upgrade pip --quiet
+"$VPY" -m pip install --upgrade pip --quiet || fail "Could not upgrade pip. Check your connection and retry."
 if ! "$VPY" -m pip install -r "$ROOT/backend/requirements.txt"; then
   say ""
   warn "Package installation failed. The most common causes:"
@@ -229,8 +244,8 @@ if command -v nmap >/dev/null 2>&1; then
 else
   info "nmap is not installed."
   say ""
-  info "Without it, port scanning falls back to a third-party API that has to"
-  info "be told your target's address. With it, scanning stays on this machine."
+  info "Without it, port scanning is skipped by default. A third-party fallback"
+  info "requires ALLOW_HACKERTARGET=true and discloses the target address."
   say ""
 
   NMAP_CMD=""
@@ -248,7 +263,7 @@ else
 
   if [ -z "$NMAP_CMD" ]; then
     warn "No supported package manager found. Install nmap from https://nmap.org/download.html"
-    info "ReconTitan works without it; port scanning just uses the fallback."
+    info "ReconTitan works without it; local port scanning will be unavailable."
   else
     info "The exact command that will run is:"
     printf '         %s%s%s\n' "$B" "$NMAP_CMD" "$N"
@@ -268,7 +283,7 @@ else
           warn "nmap installation failed. Continuing without it."
         fi
         ;;
-      *) info "Skipped. Port scanning will use the fallback." ;;
+      *) info "Skipped. Local port scanning will be unavailable." ;;
     esac
   fi
 fi
@@ -281,7 +296,7 @@ if [ -f "$ROOT/.env" ]; then
 else
   info "Creating .env from .env.example"
   info "This holds your local settings. It is never committed to git."
-  cp "$ROOT/.env.example" "$ROOT/.env"
+  cp "$ROOT/.env.example" "$ROOT/.env" || fail "Could not create .env. Check folder permissions."
   echo "CREATED_ENV=$ROOT/.env" >> "$MANIFEST"
   good "Done. The defaults work for local use."
 fi
@@ -300,9 +315,9 @@ cat <<RUN
        ${WARN}Reminder: only scan domains you own or have written permission
        to test. Danger Mode sends real attack traffic.${N}
 
-       You will see "MongoDB unavailable; running in degraded mode" in the
-       log. That is expected and harmless: scanning works fully without a
-       database. You lose saved history and the SOC console, nothing else.
+       This launcher uses synchronous scans; Redis and Celery are not needed.
+       MongoDB is optional for persistence. Missing optional scanner binaries
+       reduce coverage and are reported by the application.
 
  ============================================================================
 
@@ -326,14 +341,16 @@ else
   read -r ALT
   case "$ALT" in
     y|Y) PORT=8080; say ""; good "Using http://127.0.0.1:8080 instead."; say "" ;;
-    *)   say ""; info "Stop the other copy, then run ./setup.sh again."; say ""; exit 1 ;;
+    *)   say ""; info "Stop the other copy, then run bash setup.sh again."; say ""; exit 1 ;;
   esac
 fi
 
 cd "$ROOT/backend"
-"$VPY" -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT"
+ASYNC_SCANS_ENABLED=false "$VPY" -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT"
+SERVER_EXIT=$?
 
 say ""
 say "  ReconTitan has stopped."
-say "  Run ./setup.sh again to restart it, or ./uninstall.sh to remove everything."
+say "  Run bash setup.sh again to restart it, or bash uninstall.sh to remove everything."
 say ""
+exit "$SERVER_EXIT"

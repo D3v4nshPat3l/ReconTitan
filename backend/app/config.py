@@ -383,6 +383,8 @@ class Settings:
         # become a hole: rate limits multiply by instance count and admin
         # lockout can be sidestepped by landing on a fresh instance.
         self.SERVERLESS = _env_bool("SERVERLESS", bool(os.getenv("VERCEL")))
+        # Local launchers run one API process, not a Celery worker stack.
+        self.ASYNC_SCANS_ENABLED = _env_bool("ASYNC_SCANS_ENABLED", True) and not self.SERVERLESS
 
         # Trusting X-Forwarded-For is safe only when something in front of the
         # app is guaranteed to overwrite it. Behind the Compose nginx, uvicorn

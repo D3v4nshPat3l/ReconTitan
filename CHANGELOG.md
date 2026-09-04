@@ -4,6 +4,16 @@ All notable ReconTitan changes are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Local scan progress streams completed checks and report-building stages to both scan screens instead of staying at 5%. Existing JSON API clients remain compatible; interrupted streams show an error rather than a completed scan.
+- Cross-platform setup: preserve install records, revalidate Python versions, find versioned Homebrew Python, reject incompatible virtual environments, and stop on failed package/configuration operations.
+- Local launchers explicitly disable queued scans without workers. The legacy Windows launcher uses the repository `.venv` and never kills unrelated processes.
+- Ubuntu deployment accepts valid domains, preserves existing database credentials, checks platform/path assumptions, and stops only its own nginx for certificate operations. Renewal hooks free port 80 and restart nginx.
+- Redis/MongoDB healthchecks correctly expand quoted credentials. Danger Mode comments now describe the project's intentional enabled default accurately; its acknowledgement gate is unchanged.
+- Uninstall failure reporting retains install records, and the Unix uninstaller no longer evaluates commands from its log.
+- Setup regression coverage on Linux, macOS and Windows in CI, plus real Redis/MongoDB Compose healthchecks on the Linux runner.
+
 ### Added
 
 - Findings Explorer in the interactive report: case-insensitive multi-word search across recorded evidence, severity and scanner filters, severity ordering, and 25-result pagination. Results open the existing finding-detail modal and refresh after per-tool rescans. Filters do not change report cards or exports.

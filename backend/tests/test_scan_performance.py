@@ -165,7 +165,11 @@ def test_the_typed_acknowledgement_gate_is_still_enforced():
 def test_deploy_script_preserves_an_existing_env():
     """Re-running deploy.sh used to silently overwrite a tuned .env."""
     deploy = (REPO_ROOT / "deploy.sh").read_text(encoding="utf-8")
-    assert ".env.bak" in deploy
+    # A backup alone did not preserve credentials used by an existing volume.
+    # The setup-script tests also execute this branch against a temporary .env.
+    existing_branch = deploy.split("if [[ -f .env ]]; then", 1)[1].split("\nelse", 1)[0]
+    assert "Preserving existing .env" in existing_branch
+    assert "cat > .env" not in existing_branch
 
 
 def test_compose_wires_danger_settings_into_both_api_and_worker():

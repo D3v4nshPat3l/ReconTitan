@@ -19,7 +19,6 @@ set "ROOT=%~dp0"
 cd /d "%ROOT%"
 set "VENV=%ROOT%.venv"
 set "MANIFEST=%ROOT%.recontitan-install.log"
-set "PYTHON_INSTALLED_BY_US=0"
 
 echo.
 echo  ============================================================================
@@ -64,6 +63,7 @@ echo   so uninstall.bat can remove exactly what was added and nothing else.
 echo.
 echo  ============================================================================
 echo.
+set "AGREE="
 set /p "AGREE=  Continue? [y/N] "
 if /i not "%AGREE%"=="y" (
   echo.
@@ -73,7 +73,13 @@ if /i not "%AGREE%"=="y" (
   exit /b 0
 )
 
-echo.> "%MANIFEST%"
+REM Preserve ownership of previous installs when setup is restarted.
+echo.>> "%MANIFEST%"
+if errorlevel 1 (
+  echo Cannot write the install record. Check folder permissions.
+  pause
+  exit /b 1
+)
 echo # ReconTitan install manifest - what setup.bat created, for uninstall.bat>> "%MANIFEST%"
 echo # Created: %DATE% %TIME%>> "%MANIFEST%"
 
@@ -102,6 +108,7 @@ if defined PY_CMD (
   echo        The exact command that will run is:
   echo          winget install --id Python.Python.3.12 -e --source winget
   echo.
+  set "INSTALLPY="
   set /p "INSTALLPY=       Install Python now? [y/N] "
   if /i not "!INSTALLPY!"=="y" (
     echo.
@@ -125,8 +132,12 @@ if defined PY_CMD (
   )
   echo        Installing Python. Windows may show a permission prompt.
   winget install --id Python.Python.3.12 -e --source winget
+  if errorlevel 1 (
+    echo        Python installation failed. No successful install was recorded.
+    pause
+    exit /b 1
+  )
   echo PYTHON_INSTALLED_BY_SETUP=1>> "%MANIFEST%"
-  set "PYTHON_INSTALLED_BY_US=1"
   echo.
   echo        Python installed. You must CLOSE this window and run setup.bat
   echo        again so Windows picks up the new PATH.
@@ -141,8 +152,20 @@ echo  [2/6] Creating the private Python environment
 echo  ---------------------------------------------------------------------------
 
 if exist "%VENV%\Scripts\python.exe" (
+  "%VENV%\Scripts\python.exe" -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)"
+  if errorlevel 1 (
+    echo        Existing .venv needs Python 3.11+. Rename it and run setup again.
+    pause
+    exit /b 1
+  )
   echo        Already exists, reusing it: .venv\
 ) else (
+  if exist "%VENV%" (
+    echo        Existing .venv is incomplete or belongs to another OS.
+    echo        Rename it before rerunning. It was not overwritten.
+    pause
+    exit /b 1
+  )
   echo        Creating: .venv\
   echo        A virtual environment keeps this project's packages separate from
   echo        your system Python, so nothing here can break your other projects.
@@ -170,6 +193,11 @@ echo        Reading the list from: backend\requirements.txt
 echo.
 
 "%VPY%" -m pip install --upgrade pip --quiet
+if errorlevel 1 (
+  echo        Could not upgrade pip. Check your connection and retry.
+  pause
+  exit /b 1
+)
 "%VPY%" -m pip install -r "%ROOT%backend\requirements.txt"
 if errorlevel 1 (
   echo.
@@ -194,9 +222,8 @@ where nmap >nul 2>&1
 if errorlevel 1 (
   echo        nmap is not installed.
   echo.
-  echo        Without it, port scanning falls back to a third-party API that
-  echo        has to be told your target's address. With it, scanning stays
-  echo        on this machine.
+  echo        Without it, port scanning is skipped by default. A third-party
+  echo        fallback requires ALLOW_HACKERTARGET=true and discloses the target.
   echo.
   echo        The exact command that will run is:
   echo          winget install --id Insecure.Nmap -e --source winget
@@ -204,6 +231,7 @@ if errorlevel 1 (
   echo        This is a system-wide install and Windows will ask permission.
   echo        Declining is fine - everything else still works.
   echo.
+  set "DONMAP="
   set /p "DONMAP=       Install nmap? [y/N] "
   if /i "!DONMAP!"=="y" (
     where winget >nul 2>&1
@@ -211,11 +239,15 @@ if errorlevel 1 (
       echo        winget is unavailable. Install nmap from https://nmap.org/download.html
     ) else (
       winget install --id Insecure.Nmap -e --source winget
-      echo INSTALLED_NMAP=1>> "%MANIFEST%"
-      echo        Installed. It may need a new terminal before it is on PATH.
+      if errorlevel 1 (
+        echo        nmap installation failed. Continuing without local port scanning.
+      ) else (
+        echo INSTALLED_NMAP=1>> "%MANIFEST%"
+        echo        Installed. It may need a new terminal before it is on PATH.
+      )
     )
   ) else (
-    echo        Skipped. Port scanning will use the fallback.
+    echo        Skipped. Local port scanning will be unavailable.
   )
 ) else (
   for /f "delims=" %%V in ('nmap --version 2^>^&1 ^| findstr /R "^Nmap"') do echo        Found: %%V
@@ -232,6 +264,11 @@ if exist "%ROOT%.env" (
   echo        Creating .env from .env.example
   echo        This holds your local settings. It is never committed to git.
   copy /y "%ROOT%.env.example" "%ROOT%.env" >nul
+  if errorlevel 1 (
+    echo        Could not create .env. Check folder permissions.
+    pause
+    exit /b 1
+  )
   echo CREATED_ENV=%ROOT%.env>> "%MANIFEST%"
   echo        Done. The defaults work for local use.
 )
@@ -251,10 +288,9 @@ echo.
 echo        Reminder: only scan domains you own or have written permission
 echo        to test. Danger Mode sends real attack traffic.
 echo.
-echo        You will see "MongoDB unavailable; running in degraded mode" in
-echo        the log. That is expected and harmless: scanning works fully
-echo        without a database. You lose saved history and the SOC console,
-echo        nothing else.
+echo        This launcher uses synchronous scans; Redis and Celery are not needed.
+echo        MongoDB is optional for persistence. Missing optional scanner binaries
+echo        reduce coverage and are reported by the application.
 echo.
 echo  ============================================================================
 echo.
@@ -272,6 +308,7 @@ if errorlevel 1 (
   echo.
   echo            netstat -ano ^| findstr :8000
   echo.
+  set "ALT="
   set /p "ALT=       Start on port 8080 instead? [y/N] "
   if /i "!ALT!"=="y" (
     set "PORT=8080"
@@ -288,11 +325,13 @@ if errorlevel 1 (
 )
 
 cd /d "%ROOT%backend"
+set "ASYNC_SCANS_ENABLED=false"
 "%VPY%" -m uvicorn app.main:app --host 127.0.0.1 --port !PORT!
+set "SERVER_EXIT=!errorlevel!"
 
 echo.
 echo   ReconTitan has stopped.
 echo   Run setup.bat again to restart it, or uninstall.bat to remove everything.
 echo.
 pause
-endlocal
+exit /b %SERVER_EXIT%

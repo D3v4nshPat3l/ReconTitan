@@ -44,6 +44,7 @@ say()  { printf '%s\n' "$*"; }
 rule() { printf ' ---------------------------------------------------------------------------\n'; }
 info() { printf '     %s\n' "$*"; }
 good() { printf '     %s%s%s\n' "$OK" "$*" "$N"; }
+warn() { printf '     %s%s%s\n' "$WARN" "$*" "$N"; }
 
 human_size() {
   if [ -d "$1" ]; then du -sh "$1" 2>/dev/null | cut -f1; else echo "n/a"; fi
@@ -106,13 +107,17 @@ if [ -d "$VENV" ]; then
   say ""
   info "Removing this frees the most space. It does NOT affect your system"
   info "Python or any other project. You can recreate it any time by"
-  info "running ./setup.sh again."
+  info "running bash setup.sh again."
   say ""
   if ask "Remove it?"; then
     info "Deleting $VENV ..."
-    rm -rf "$VENV"
-    good "Removed."
-    REMOVED=$((REMOVED+1))
+    if rm -rf "$VENV"; then
+      good "Removed."
+      REMOVED=$((REMOVED+1))
+    else
+      warn "Could not remove the environment. Install record kept for retry."
+      KEPT=$((KEPT+1))
+    fi
   else
     info "Kept."
     KEPT=$((KEPT+1))
@@ -136,9 +141,13 @@ if [ -f "$ROOT/.env" ]; then
   info "reconfigure. Remove it if you are wiping this machine clean."
   say ""
   if ask "Remove it?"; then
-    rm -f "$ROOT/.env"
-    good "Removed."
-    REMOVED=$((REMOVED+1))
+    if rm -f "$ROOT/.env"; then
+      good "Removed."
+      REMOVED=$((REMOVED+1))
+    else
+      warn "Could not remove .env. Install record kept for retry."
+      KEPT=$((KEPT+1))
+    fi
   else
     info "Kept."
     KEPT=$((KEPT+1))
@@ -174,7 +183,7 @@ say "  ITEM 4 of 5:  Python itself"
 rule
 say ""
 if [ -f "$MANIFEST" ] && grep -q "PYTHON_INSTALLED_BY_SETUP=1" "$MANIFEST" 2>/dev/null; then
-  INSTALL_CMD="$(grep '^PYTHON_INSTALL_CMD=' "$MANIFEST" 2>/dev/null | cut -d= -f2-)"
+  INSTALL_CMD="$(grep '^PYTHON_INSTALL_CMD=' "$MANIFEST" 2>/dev/null | tail -1 | cut -d= -f2-)"
   info "setup.sh installed Python on this machine with:"
   info "  ${INSTALL_CMD:-(command not recorded)}"
   say ""
@@ -198,7 +207,7 @@ say "  ITEM 5 of 5:  nmap"
 rule
 say ""
 if [ -f "$MANIFEST" ] && grep -q "INSTALLED_NMAP=1" "$MANIFEST" 2>/dev/null; then
-  NMAP_CMD="$(grep '^NMAP_INSTALL_CMD=' "$MANIFEST" 2>/dev/null | cut -d= -f2-)"
+  NMAP_CMD="$(grep '^NMAP_INSTALL_CMD=' "$MANIFEST" 2>/dev/null | tail -1 | cut -d= -f2-)"
   info "setup.sh installed nmap with:"
   info "  ${NMAP_CMD:-(command not recorded)}"
   say ""
@@ -206,10 +215,23 @@ if [ -f "$MANIFEST" ] && grep -q "INSTALLED_NMAP=1" "$MANIFEST" 2>/dev/null; the
   info "this project, and other software may have started using it."
   say ""
   if ask "Remove nmap?"; then
-    REMOVE_CMD="$(printf '%s' "$NMAP_CMD" | sed 's/install -y/remove -y/; s/install/uninstall/; s/-S --noconfirm/-R --noconfirm/')"
-    info "Running: $REMOVE_CMD"
-    eval "$REMOVE_CMD" && good "Removed." || warn "Removal failed - remove it by hand if you still want it gone."
-    REMOVED=$((REMOVED+1))
+    # The log is data, never executable shell code.
+    case "$NMAP_CMD" in
+      'brew install nmap') REMOVE_CMD=(brew uninstall nmap) ;;
+      'sudo apt-get install -y nmap') REMOVE_CMD=(sudo apt-get remove -y nmap) ;;
+      'sudo dnf install -y nmap') REMOVE_CMD=(sudo dnf remove -y nmap) ;;
+      'sudo pacman -S --noconfirm nmap') REMOVE_CMD=(sudo pacman -R --noconfirm nmap) ;;
+      'sudo zypper install -y nmap') REMOVE_CMD=(sudo zypper remove -y nmap) ;;
+      *) REMOVE_CMD=(false); warn "Unknown install command; remove nmap manually." ;;
+    esac
+    info "Running: ${REMOVE_CMD[*]}"
+    if "${REMOVE_CMD[@]}"; then
+      good "Removed."
+      REMOVED=$((REMOVED+1))
+    else
+      warn "Removal failed - remove it by hand if you still want it gone."
+      KEPT=$((KEPT+1))
+    fi
   else
     info "Kept."
     KEPT=$((KEPT+1))
@@ -244,7 +266,7 @@ cat <<DONE
 
    Finished.  ${REMOVED} item(s) removed,  ${KEPT} item(s) kept.
 
-   To reinstall at any time, run ./setup.sh
+   To reinstall at any time, run bash setup.sh
 
  ============================================================================
 

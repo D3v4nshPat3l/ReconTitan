@@ -19,6 +19,8 @@ set "VENV=%ROOT%.venv"
 set "MANIFEST=%ROOT%.recontitan-install.log"
 set "REMOVED=0"
 set "KEPT=0"
+REM Blank responses must not reuse inherited environment values.
+for %%V in (GO D1 D2 D3 D4 D5) do set "%%V="
 
 echo.
 echo  ============================================================================
@@ -81,6 +83,7 @@ if exist "%VENV%" (
     rmdir /s /q "%VENV%"
     if exist "%VENV%" (
       echo     Could not fully delete it. Close any program using it and retry.
+      set /a KEPT+=1
     ) else (
       echo     Removed.
       set /a REMOVED+=1
@@ -112,8 +115,13 @@ if exist "%ROOT%.env" (
   set /p "D2=    Remove it? [y/N] "
   if /i "!D2!"=="y" (
     del /q "%ROOT%.env"
-    echo     Removed.
-    set /a REMOVED+=1
+    if exist "%ROOT%.env" (
+      echo     Could not remove .env. Install record kept for retry.
+      set /a KEPT+=1
+    ) else (
+      echo     Removed.
+      set /a REMOVED+=1
+    )
   ) else (
     echo     Kept.
     set /a KEPT+=1
@@ -175,8 +183,13 @@ if errorlevel 1 (
   set /p "D4=    Uninstall Python? [y/N] "
   if /i "!D4!"=="y" (
     winget uninstall --id Python.Python.3.12 -e
-    echo     Done.
-    set /a REMOVED+=1
+    if errorlevel 1 (
+      echo     Removal failed. Install record kept for retry.
+      set /a KEPT+=1
+    ) else (
+      echo     Done.
+      set /a REMOVED+=1
+    )
   ) else (
     echo     Kept.
     set /a KEPT+=1
@@ -205,8 +218,13 @@ if errorlevel 1 (
   set /p "D5=    Remove nmap? [y/N] "
   if /i "!D5!"=="y" (
     winget uninstall --id Insecure.Nmap -e
-    echo     Done.
-    set /a REMOVED+=1
+    if errorlevel 1 (
+      echo     Removal failed. Install record kept for retry.
+      set /a KEPT+=1
+    ) else (
+      echo     Done.
+      set /a REMOVED+=1
+    )
   ) else (
     echo     Kept.
     set /a KEPT+=1

@@ -589,6 +589,8 @@ button { cursor: pointer; background: none; border: none; }
 .progress-pct { margin-top: .6rem; font-family: var(--mono); font-size: .8rem; color: var(--muted); }
 .tool-pills { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: center; margin-top: 1.2rem; }
 .tool-pill.done { color: var(--ok); border-color: rgba(74,222,128,.3); }
+.tool-pill.error { color: var(--danger, #ef4444); border-color: rgba(239,68,68,.3); }
+.tool-pill.skipped { opacity: .6; }
 .tool-pill.active { color: var(--accent); border-color: var(--accent-dim); }
 
 /* ── Modal ───────────────────────────────────────────────────────────── */

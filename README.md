@@ -41,10 +41,10 @@ Double-click it, or run it from a terminal.
 **macOS / Linux**
 
 ```bash
-./setup.sh
+bash setup.sh
 ```
 
-If it won't run: `chmod +x setup.sh`
+Alternatively: `chmod +x setup.sh` followed by `./setup.sh`.
 
 </td>
 </tr>
@@ -66,10 +66,16 @@ It **won't** install anything system-wide without asking first, won't modify any
 
 Then open **<http://127.0.0.1:8000>**.
 
+Local launchers use synchronous scans and do not need Redis or a Celery worker,
+even if MongoDB is already running. Docker Compose explicitly enables queued
+scans. Danger Mode retains the project's enabled default and still requires
+typed acknowledgement per scan; existing `.env` settings are preserved.
+Python 3.11+ is required, including inside a reused `.venv`.
+
 ### Removing it
 
 ```
-uninstall.bat          ·          ./uninstall.sh
+uninstall.bat          ·          bash uninstall.sh
 ```
 
 Goes through five items one at a time — the environment, your config, bytecode caches, Python, and nmap — showing what each is, where it lives and how much space it uses. **The default for every question is keep.** Nothing is deleted unless you type `y` for that specific item.

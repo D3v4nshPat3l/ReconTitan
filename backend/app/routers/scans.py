@@ -104,14 +104,14 @@ def initiate_scan(request: ScanRequest, http_request: Request):
         )
         raise HTTPException(status_code=400, detail=error)
 
-    if settings.SERVERLESS:
+    if settings.SERVERLESS or not settings.ASYNC_SCANS_ENABLED:
         # No worker process exists to consume the queue here, so accepting the
         # scan would leave it queued forever. Fail loudly and name the endpoint
         # that does work in this deployment.
         raise HTTPException(
             status_code=503,
             detail=(
-                "Asynchronous scans need a Celery worker, which this deployment does not run. "
+                "Asynchronous scans are disabled for this deployment; they need a Celery worker. "
                 "Use GET /api/test-scan, which performs the scan synchronously."
             ),
         )

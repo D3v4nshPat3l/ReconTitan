@@ -38,8 +38,11 @@ jobs:
           node --check frontend/dashboard.js
           node --check frontend/report.js
           node --check frontend/findings-explorer.js
-          node --test frontend/tests/findings-explorer.test.cjs
+          node --check frontend/scan-progress.js
+          node --test frontend/tests/*.test.cjs
           bash -n deploy.sh
+          bash -n setup.sh
+          bash -n uninstall.sh
       - name: Deployment preflight
         # Gates on configuration that fails silently rather than loudly: a
         # database that is not there, limits that stop being shared, an admin
@@ -75,4 +78,27 @@ jobs:
           MONGO_PASS: ci-mongo-password
           MONGO_AUTH_SOURCE: recontitan
           ADMIN_TOKEN: ci-admin-console-token-value-over-forty-characters-long
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          trap 'docker compose down' EXIT
+          docker compose up -d --wait --wait-timeout 120 redis mongo
+
+  setup-regressions:
+    name: Setup regressions (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies in runner environment
+        run: python -m pip install -r backend/requirements.txt pytest==8.4.2
+      - name: Exercise setup logic without installing tools or starting services
+        run: python -m pytest -q backend/tests/test_setup_scripts.py

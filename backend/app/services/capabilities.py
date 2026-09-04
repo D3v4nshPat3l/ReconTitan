@@ -39,7 +39,7 @@ def runtime_report() -> dict:
         (available if any(shutil.which(b) for b in binaries) else missing).append(module)
     return {
         "deployment": "serverless" if settings.SERVERLESS else "server",
-        "async_scans": not settings.SERVERLESS,
+        "async_scans": settings.ASYNC_SCANS_ENABLED and not settings.SERVERLESS,
         "sync_scan_endpoint": "/api/test-scan",
         "shared_rate_limit_state": settings.SHARED_STATE_ENABLED,
         "binary_modules_available": sorted(available),

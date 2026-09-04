@@ -46,7 +46,7 @@ services:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep -q PONG"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$${REDIS_PASSWORD}\" redis-cli ping | grep -qx PONG"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -73,7 +73,7 @@ services:
       MONGO_APP_PASS: ${MONGO_PASS:?Set MONGO_PASS in .env}
       MONGO_APP_DB: ${MONGO_DB:-recontitan}
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --username '$${MONGO_INITDB_ROOT_USERNAME}' --password '$${MONGO_INITDB_ROOT_PASSWORD}' --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep -q 1"]
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep -qx 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -97,6 +97,7 @@ services:
     volumes:
       - ./frontend:/frontend:ro
     environment:
+      ASYNC_SCANS_ENABLED: "true"
       RECONTITAN_DEBUG: "false"
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
@@ -125,7 +126,7 @@ services:
       JS_ANALYSIS_MAX_FILES: ${JS_ANALYSIS_MAX_FILES:-20}
       JS_ANALYSIS_MAX_BYTES: ${JS_ANALYSIS_MAX_BYTES:-1048576}
       TAKEOVER_MAX_SUBDOMAINS: ${TAKEOVER_MAX_SUBDOMAINS:-150}
-      # Danger Mode stays off unless the operator opts in for an authorized target.
+      # Project default is enabled; every Danger scan still requires acknowledgement.
       ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-true}
       DANGER_MODE_MAX_TARGETS: ${DANGER_MODE_MAX_TARGETS:-1}
       DANGER_MAX_HOSTS: ${DANGER_MAX_HOSTS:-5}
@@ -222,7 +223,7 @@ services:
       JS_ANALYSIS_MAX_FILES: ${JS_ANALYSIS_MAX_FILES:-20}
       JS_ANALYSIS_MAX_BYTES: ${JS_ANALYSIS_MAX_BYTES:-1048576}
       TAKEOVER_MAX_SUBDOMAINS: ${TAKEOVER_MAX_SUBDOMAINS:-150}
-      # Danger Mode stays off unless the operator opts in for an authorized target.
+      # Project default is enabled; every Danger scan still requires acknowledgement.
       ALLOW_DANGER_MODE: ${ALLOW_DANGER_MODE:-true}
       DANGER_MODE_MAX_TARGETS: ${DANGER_MODE_MAX_TARGETS:-1}
       DANGER_MAX_HOSTS: ${DANGER_MAX_HOSTS:-5}

@@ -1510,19 +1510,27 @@ async function pollQueuedScan(scanId) {
 
 async function runSynchronousFallback(target, scanType, acknowledgement, reason) {
   const loadingSub = $('loadingSub');
-  if (loadingSub) loadingSub.textContent = `Compatibility mode: ${reason}`;
+  if (loadingSub) loadingSub.textContent = `Local scan: ${reason}. Progress counts completed checks and report steps, not remaining time.`;
   const startedAt = Date.now();
-  setProgress(5, 'Compatibility scan running...');
-  const ticker = window.setInterval(() => {
+  let percent = 0;
+  let phase = 'Connecting to scan...';
+  const refreshProgress = () => {
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
-    setProgress(5, `Compatibility scan running... (${elapsed}s)`);
-  }, 1000);
-  let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(scanType)}`;
+    setProgress(percent, `${phase} (${elapsed}s)`);
+  };
+  refreshProgress();
+  const ticker = window.setInterval(refreshProgress, 1000);
+  let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(scanType)}&stream=true`;
   if (acknowledgement) url += `&danger_acknowledgement=${encodeURIComponent(acknowledgement)}`;
   try {
     const response = await apiFetch(url);
     if (!response.ok) throw new Error(await responseError(response));
-    return normalizeReportData(await response.json());
+    return normalizeReportData(await ScanProgress.read(response, event => {
+      percent = event.progress;
+      phase = event.phase;
+      refreshProgress();
+      if (event.tool) updateToolPill(event.tool, event.status === 'ok' ? 'done' : event.status);
+    }));
   } finally {
     window.clearInterval(ticker);
   }

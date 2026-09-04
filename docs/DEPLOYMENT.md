@@ -12,21 +12,43 @@ Three shapes, in increasing order of effort. Pick one.
 
 ## A. Local development
 
+The recommended interactive installers are `setup.bat` on Windows and
+`bash setup.sh` on Linux/macOS. They use a repository-local `.venv` and force
+`ASYNC_SCANS_ENABLED=false` for the launched process. This stays synchronous
+even if MongoDB or Redis happens to be installed. No Celery worker is started.
+
+For manual installation on **Windows (Command Prompt)**:
+
 ```bash
 python -m venv .venv
 ```
 
-```bash
+```bat
 .venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 ```
 
-```bash
+```bat
 copy .env.example .env
 ```
 
-```bash
+```bat
+set "ASYNC_SCANS_ENABLED=false"
 .venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --port 8000
 ```
+
+On **Linux/macOS**, use a Python 3.11+ interpreter:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt
+cp -n .env.example .env
+ASYNC_SCANS_ENABLED=false .venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+Existing `.env` files are kept. An old or incompatible `.venv` must be renamed
+by the operator before setup can recreate it. On older Linux distributions,
+setup stops with an explanation if configured repositories do not offer Python
+3.11+; it does not add third-party repositories or accept Python 3.10.
 
 Open <http://127.0.0.1:8000>. Scans run through the synchronous `/api/test-scan` endpoint,
 so **no Redis, no Celery, and no MongoDB are required** to scan and read a report.
@@ -41,6 +63,16 @@ MongoDB is only needed for stored scan history and the admin console (section D)
 ---
 
 ## B. Docker Compose (recommended for a real deployment)
+
+The supplied production stack assumes a Linux host. `deploy.sh` automates
+Ubuntu 22.04/24.04 only; run it from a path such as `/opt/recontitan` using
+`sudo bash deploy.sh`. Existing `.env` credentials are preserved. If database
+volumes survive but `.env` is missing, restore the original credentials before
+rerunning deployment. Do not generate new passwords for existing MongoDB users.
+
+Compose enables asynchronous scans explicitly because it also starts the worker.
+For a separately managed worker outside Compose, set `ASYNC_SCANS_ENABLED=true`
+only after configuring MongoDB, Redis and a Celery worker consuming the queues.
 
 ### 1. Configure
 
@@ -80,6 +112,14 @@ in production
 ```
 
 ### 2. Launch
+
+Before a manual Compose launch, provide a valid TLS certificate at
+`nginx/certs/fullchain.pem` and its key at `nginx/certs/privkey.pem` (or use the
+Ubuntu deployment script to obtain them). Nginx cannot start without these files.
+Also populate `ADMIN_TOKEN`, which Compose requires even when the console is disabled.
+
+Danger Mode retains the project's enabled default and its typed-acknowledgement
+gate. Set `ALLOW_DANGER_MODE=false` to disable the feature entirely.
 
 ```bash
 docker compose up -d

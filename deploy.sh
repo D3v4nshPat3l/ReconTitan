@@ -10,17 +10,23 @@ warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 fail() { echo -e "${RED}[✗]${NC} $1" >&2; exit 1; }
 trap 'fail "Deployment stopped near line $LINENO"' ERR
 
-[[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Run as root: sudo ./deploy.sh"
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Run as root: sudo bash deploy.sh"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+# This path is embedded in systemd and cron files, not evaluated as shell input.
+[[ "$ROOT" =~ ^/[a-zA-Z0-9_./-]+$ ]] || fail "Deploy from a path without spaces or shell metacharacters, such as /opt/recontitan"
+. /etc/os-release
+[[ "$ID" == ubuntu && "$VERSION_ID" =~ ^(22\.04|24\.04)$ ]] || fail "This deployment script supports Ubuntu 22.04 and 24.04 only"
 
 read -r -p "Enter your public domain (example: scanner.example.com): " DOMAIN
 DOMAIN=${DOMAIN,,}
-[[ "$DOMAIN" =~ ^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || fail "Enter a valid public domain"
+[[ ${#DOMAIN} -le 253 && "$DOMAIN" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || fail "Enter a valid public domain"
 read -r -p "Enter your email for Let's Encrypt: " SSL_EMAIL
 [[ "$SSL_EMAIL" == *@*.* ]] || fail "Enter a valid email address"
 
 log "Installing required packages"
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl certbot openssl ufw gnupg
+apt-get install -y -qq ca-certificates curl certbot openssl ufw gnupg python3 iproute2
 
 if ! command -v docker >/dev/null 2>&1; then
     log "Configuring Docker's signed apt repository"
@@ -45,16 +51,21 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is not ins
 log "Configuring firewall"
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 22/tcp comment SSH
+SSH_CONNECTION_VALUE=${SSH_CONNECTION:-}
+SSH_PORT=${SSH_CONNECTION_VALUE##* }
+SSH_PORT=${SSH_PORT:-22}
+[[ "$SSH_PORT" =~ ^[0-9]+$ ]] || fail "Cannot determine SSH port"
+ufw allow "$SSH_PORT/tcp" comment SSH
 ufw allow 80/tcp comment HTTP
 ufw allow 443/tcp comment HTTPS
 ufw --force enable
 
 if [[ -f .env ]]; then
-    warn "An existing .env was found; keeping it as .env.bak before regenerating"
-    cp -a .env ".env.bak.$(date +%Y%m%d%H%M%S)"
-fi
-
+    log "Preserving existing .env and database credentials; no secrets will be regenerated"
+else
+    # A missing .env alongside existing data is recovery work, not a fresh install.
+    # Fail conservatively rather than generating credentials that cannot open it.
+    [[ -z "$(docker volume ls -q --filter label=com.docker.compose.volume=mongo_data)" ]] || fail "Existing MongoDB data found. Restore its .env credentials before deploying; nothing was overwritten"
 log "Generating production secrets"
 SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 API_ACCESS_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
@@ -64,6 +75,7 @@ MONGO_PASS=$(python3 -c 'import secrets; print(secrets.token_urlsafe(40))')
 ADMIN_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
 cat > .env <<ENVEOF
 RECONTITAN_DEBUG=false
+ASYNC_SCANS_ENABLED=true
 DOMAIN=$DOMAIN
 SECRET_KEY=$SECRET_KEY
 API_ACCESS_KEY=$API_ACCESS_KEY
@@ -101,10 +113,9 @@ ADMIN_LOCKOUT_SECONDS=900
 AUDIT_ENABLED=true
 AUDIT_RETENTION_DAYS=90
 
-# Danger Mode. Left disabled deliberately: it sends bounded penetration-test
-# simulation traffic and must be a conscious decision per deployment. Set to
-# true ONLY for targets you own or hold written authorization to assess, then
-# run: docker compose up -d --force-recreate api worker
+# Danger Mode follows the project's enabled default. Every scan still needs
+# typed acknowledgement. To disable the feature entirely, set this flag to
+# false and run: docker compose up -d --force-recreate api worker
 ALLOW_DANGER_MODE=true
 DANGER_MAX_SCAN_SECONDS=240
 DANGER_MAX_REQUESTS_TOTAL=500
@@ -135,12 +146,19 @@ SECURITYTRAILS_API_KEY=
 URLSCAN_API_KEY=
 INTELX_API_KEY=
 ENVEOF
+fi
 chmod 600 .env
+
+# Validate before interrupting any running service. Existing config may be
+# incomplete (e.g. a local .env); never replace it automatically.
+docker compose config --quiet
+CONFIG_DOMAIN=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["api"]["environment"]["DOMAIN"])')
+[[ "$CONFIG_DOMAIN" == "$DOMAIN" ]] || fail "Domain differs from existing .env. Update its domain, hosts and CORS deliberately before deploying"
 
 mkdir -p nginx/certs
 log "Obtaining a Let's Encrypt certificate"
-docker compose down --remove-orphans >/dev/null 2>&1 || true
-fuser -k 80/tcp >/dev/null 2>&1 || true
+docker compose stop nginx
+[[ -z "$(ss -H -ltn 'sport = :80')" ]] || fail "Port 80 is occupied by another service. Free it explicitly and rerun; no process was killed"
 if certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --email "$SSL_EMAIL" --preferred-challenges http; then
     ln -sfn "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" nginx/certs/fullchain.pem
     ln -sfn "/etc/letsencrypt/live/$DOMAIN/privkey.pem" nginx/certs/privkey.pem
@@ -191,13 +209,12 @@ systemctl daemon-reload
 systemctl enable recontitan >/dev/null
 
 cat > /etc/cron.d/recontitan-ssl-renew <<CRON
-17 3 * * * root certbot renew --quiet --deploy-hook 'cd $WORKDIR && docker compose exec -T nginx nginx -s reload'
+17 3 * * * root certbot renew --quiet --pre-hook 'cd $WORKDIR && docker compose stop nginx' --post-hook 'cd $WORKDIR && docker compose up -d nginx'
 CRON
 chmod 644 /etc/cron.d/recontitan-ssl-renew
 
 ok "ReconTitan is available at https://$DOMAIN"
-warn "Browser API access key (store securely): $API_ACCESS_KEY"
-warn "Admin token (store securely, shown once): $ADMIN_TOKEN"
+log "API and admin credentials are stored in $ROOT/.env; existing credentials were preserved"
 echo
 log "The admin surface has no public route. To reach it:"
 echo "    ssh -N -L 9000:127.0.0.1:9000 root@$DOMAIN"

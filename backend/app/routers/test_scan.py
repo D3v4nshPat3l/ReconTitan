@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -9,6 +10,8 @@ import uuid
 from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 
 from app.config import settings
 from app.models.schemas import ScanType, VerifyRequest
@@ -114,6 +117,7 @@ def test_scan(
     target: str = Query(..., min_length=3, max_length=253),
     scan_type: ScanType = Query(default=ScanType.FULL),
     danger_acknowledgement: str | None = Query(default=None, max_length=120),
+    stream: bool = False,
 ):
     """Run a selected scan profile synchronously without MongoDB or Celery."""
     # Only the queued path used to record scan events, but this is the endpoint
@@ -136,6 +140,34 @@ def test_scan(
         )
         raise HTTPException(status_code=400, detail=error)
 
+    events = _scan_events(http_request, target, scan_type)
+    if stream:
+        return StreamingResponse(
+            _encode_scan_events(events),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
+    # Existing API clients still receive the original single JSON report.
+    for event in events:
+        if event["type"] == "complete":
+            return event["report"]
+
+
+def _encode_scan_events(events):
+    try:
+        for event in events:
+            yield json.dumps(jsonable_encoder(event), ensure_ascii=False) + "\n"
+    except Exception:
+        # HTTP headers have already been sent. Signal failure in the stream,
+        # without exposing internal exceptions or pretending it completed.
+        logger.exception("[test] streaming scan failed")
+        yield json.dumps({"type": "error", "message": "Scan failed while building the report. Check the server logs."}) + "\n"
+    finally:
+        events.close()
+
+
+def _scan_events(http_request: Request, target: str, scan_type: ScanType):
+    """Run once, yielding real milestones before/after each blocking stage."""
     scan_id = f"test_{uuid.uuid4().hex[:8]}"
     start = time.monotonic()
     all_findings: list[dict] = []
@@ -145,13 +177,6 @@ def test_scan(
     danger_session = None
     danger_stage_names: set[str] = set()
     if scan_type is ScanType.DANGER:
-        # Depth follows the authorisation gate. The port scanner reads this and
-        # runs its deep profile, so a user who typed the danger phrase gets the
-        # thorough scan without a separate global setting, and a plain Full scan
-        # keeps the bounded traffic its description promises.
-        from app.tasks.recon.port_scan import DANGER_ACTIVE
-        DANGER_ACTIVE.set(True)
-
         from app.tasks.vulnscan.danger.pipeline import danger_stages
 
         danger_session, danger_tools = danger_stages(target)
@@ -165,24 +190,44 @@ def test_scan(
     # still produced, which is the behaviour the UI advertises.
     budget_seconds = settings.MAX_SYNC_SCAN_SECONDS
     skipped_for_time: list[str] = []
+    total_steps = len(tools) + 2  # Scanner checks, summary, finding explanations.
+
+    def progress(completed, phase, **details):
+        return {
+            "type": "progress", "scan_id": scan_id,
+            "progress": min(99, int(completed * 100 / total_steps)),
+            "completed_steps": completed, "total_steps": total_steps,
+            "phase": phase, **details,
+        }
+
+    yield progress(0, "Starting scan")
 
     for index, (tool_name, tool_fn) in enumerate(tools):
         if budget_seconds and time.monotonic() - start >= budget_seconds:
             skipped_for_time = [name for name, _ in tools[index:]]
-            for name in skipped_for_time:
+            for offset, name in enumerate(skipped_for_time):
                 tool_results[name] = {"status": "skipped", "reason": "time_limit", "findings": 0}
                 if danger_session is not None and name in danger_stage_names:
                     if name not in danger_session.stages_skipped:
                         danger_session.stages_skipped.append(name)
+                yield progress(index + offset + 1, f"Skipped {name}: scan time limit", tool=name, status="skipped")
             logger.warning(
                 "[test] %s: %.1fs budget reached, skipping %d of %d stages",
                 target, budget_seconds, len(skipped_for_time), len(tools),
             )
             break
 
+        yield progress(index, f"Running {tool_name}", tool=tool_name, status="running")
         tool_start = time.monotonic()
         try:
-            results = tool_fn(target) or []
+            # Streaming iterators can resume on different pool threads. Scope
+            # the deep-scan context to the tool call, never across a yield.
+            from app.tasks.recon.port_scan import DANGER_ACTIVE
+            token = DANGER_ACTIVE.set(scan_type is ScanType.DANGER)
+            try:
+                results = tool_fn(target) or []
+            finally:
+                DANGER_ACTIVE.reset(token)
             elapsed = round(time.monotonic() - tool_start, 2)
             tool_results[tool_name] = {"status": "ok", "findings": len(results), "time_seconds": elapsed}
             for finding in results:
@@ -209,6 +254,11 @@ def test_scan(
             if danger_session is not None and tool_name in danger_stage_names:
                 danger_session.stages_failed.append(tool_name)
             logger.exception("[test] %s failed", tool_name)
+        result = tool_results[tool_name]
+        yield progress(
+            index + 1, f"Finished {tool_name}" if result["status"] == "ok" else f"Check failed: {tool_name}",
+            tool=tool_name, status=result["status"], findings=result.get("findings", 0),
+        )
 
     if danger_session is not None and danger_session.stages_skipped:
         notice = dict(danger_session.deadline_finding())
@@ -222,10 +272,13 @@ def test_scan(
 
     from app.tasks.ai_analysis import ai_status, explain_findings_bulk, generate_scan_summary
 
+    yield progress(len(tools), "Building scan summary")
     ai_summary = generate_scan_summary(target, all_findings, severity_counts)
     # Bounded in count, wall-clock, and concurrency inside the helper, so a slow
     # local model cannot hold this synchronous request open indefinitely.
+    yield progress(len(tools) + 1, "Explaining findings")
     explain_findings_bulk(all_findings)
+    yield progress(total_steps, "Finalizing report")
 
     payload = {
         "time_limited": bool(skipped_for_time),
@@ -252,7 +305,7 @@ def test_scan(
         findings=len(all_findings),
         duration_seconds=payload["total_time_seconds"],
     )
-    return payload
+    yield {"type": "complete", "progress": 100, "report": payload}
 
 
 @router.get("/rescan")
