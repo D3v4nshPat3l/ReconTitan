@@ -55,6 +55,35 @@ def _hackertarget_portscan(target: str) -> str:
         return ""
 
 
+def _find_binary(name: str) -> str | None:
+    """Locate a scanner binary, PATH first and then the usual install roots.
+
+    nmap's Windows installer does not reliably add itself to PATH, so
+    shutil.which misses a perfectly good installation and the report says
+    "Binary not installed" about a binary sitting in Program Files. Checking
+    the standard locations turns that into a non-issue rather than something
+    every user has to diagnose.
+    """
+    found = shutil.which(name)
+    if found:
+        return found
+
+    exe = f"{name}.exe" if os.name == "nt" else name
+    candidates = [
+        os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Nmap", exe),
+        os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Nmap", exe),
+        f"/usr/bin/{name}",
+        f"/usr/local/bin/{name}",
+        f"/opt/homebrew/bin/{name}",
+        f"/snap/bin/{name}",
+    ]
+    for path in candidates:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            logger.info("[portscan] %s found outside PATH at %s", name, path)
+            return path
+    return None
+
+
 def _has_raw_socket_privilege() -> bool:
     """Can this process send raw packets?
 
@@ -92,12 +121,13 @@ def _nmap_subprocess(address: str) -> str:
     An operator who needs either can run nmap directly. It should not be
     something a web service does on their behalf.
     """
-    if not shutil.which("nmap"):
+    nmap_bin = _find_binary("nmap")
+    if not nmap_bin:
         return ""
 
     if settings.NMAP_DEEP_SCAN:
         privileged = _has_raw_socket_privilege()
-        argv = ["nmap"]
+        argv = [nmap_bin]
         if privileged:
             # SYN scan and OS fingerprinting, both of which need raw sockets.
             argv += ["-sS", "-O"]
@@ -123,7 +153,7 @@ def _nmap_subprocess(address: str) -> str:
             else "TCP connect, no OS detection (unprivileged)",
         )
     else:
-        argv = ["nmap", "-sV", "--open", "-T3", "--top-ports", "1000", "--", address]
+        argv = [nmap_bin, "-sV", "--open", "-T3", "--top-ports", "1000", "--", address]
         timeout = settings.SCAN_TIMEOUT_NMAP
 
     try:
@@ -190,11 +220,12 @@ def _parse_nse_findings(raw_output: str) -> list[dict]:
 
 
 def _rustscan_subprocess(address: str) -> str:
-    if not shutil.which("rustscan"):
+    rustscan_bin = _find_binary("rustscan")
+    if not rustscan_bin:
         return ""
     try:
         result = subprocess.run(
-            ["rustscan", "-a", address, "--", "-sV"],
+            [rustscan_bin, "-a", address, "--", "-sV"],
             capture_output=True, text=True, timeout=min(settings.SCAN_TIMEOUT_NMAP, 180), check=False,
         )
         return result.stdout
@@ -237,7 +268,7 @@ def run_port_scan(target: str) -> list[dict]:
         # Say which of the three sources were even attempted. "No results"
         # otherwise reads as "no open ports", which is the opposite conclusion
         # when the real cause is that nothing ran.
-        local_available = bool(shutil.which("rustscan") or shutil.which("nmap"))
+        local_available = bool(_find_binary("rustscan") or _find_binary("nmap"))
         if local_available:
             reason = "A local scanner ran but returned no parseable output."
         elif settings.ALLOW_HACKERTARGET:

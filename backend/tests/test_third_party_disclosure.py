@@ -86,7 +86,10 @@ def test_port_scan_reports_that_it_did_not_run(monkeypatch):
     monkeypatch.setattr(port_scan.settings, "ALLOW_HACKERTARGET", False)
     monkeypatch.setattr(port_scan, "validate_scan_target", lambda t, **k: (True, "example.com", ""))
     monkeypatch.setattr(port_scan, "resolve_target_addresses", lambda d: ["93.184.216.34"])
-    monkeypatch.setattr(port_scan.shutil, "which", lambda b: None)
+    # Stub the resolver, not shutil.which: the scanner also looks in the
+    # standard install roots, so a machine with nmap in Program Files would
+    # otherwise defeat this simulation of "nothing installed".
+    monkeypatch.setattr(port_scan, "_find_binary", lambda b: None)
 
     findings = port_scan.run_port_scan("example.com")
 
@@ -101,7 +104,10 @@ def test_port_scan_skip_notice_names_the_real_cause(monkeypatch):
     monkeypatch.setattr(port_scan.settings, "ALLOW_HACKERTARGET", True)
     monkeypatch.setattr(port_scan, "validate_scan_target", lambda t, **k: (True, "example.com", ""))
     monkeypatch.setattr(port_scan, "resolve_target_addresses", lambda d: ["93.184.216.34"])
-    monkeypatch.setattr(port_scan.shutil, "which", lambda b: None)
+    # Stub the resolver, not shutil.which: the scanner also looks in the
+    # standard install roots, so a machine with nmap in Program Files would
+    # otherwise defeat this simulation of "nothing installed".
+    monkeypatch.setattr(port_scan, "_find_binary", lambda b: None)
     monkeypatch.setattr(port_scan, "_hackertarget_portscan", lambda a: "")
 
     findings = port_scan.run_port_scan("example.com")
