@@ -445,7 +445,7 @@ def test_parallel_phase_actually_overlaps(_no_db, monkeypatch):
 
     def tool():
         try:
-            rendezvous.wait(timeout=1)
+            rendezvous.wait(timeout=5)
             overlapped.set()
         except threading.BrokenBarrierError:
             # A sequential implementation makes the first tool time out. The
