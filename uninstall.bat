@@ -59,7 +59,7 @@ if /i not "%GO%"=="y" (
 REM ---------------------------------------------------------------------------
 echo.
 echo  ---------------------------------------------------------------------------
-echo   ITEM 1 of 4:  Python environment ^(.venv^)
+echo   ITEM 1 of 5:  Python environment ^(.venv^)
 echo  ---------------------------------------------------------------------------
 
 if exist "%VENV%" (
@@ -97,7 +97,7 @@ if exist "%VENV%" (
 REM ---------------------------------------------------------------------------
 echo.
 echo  ---------------------------------------------------------------------------
-echo   ITEM 2 of 4:  Configuration file ^(.env^)
+echo   ITEM 2 of 5:  Configuration file ^(.env^)
 echo  ---------------------------------------------------------------------------
 
 if exist "%ROOT%.env" (
@@ -126,7 +126,7 @@ if exist "%ROOT%.env" (
 REM ---------------------------------------------------------------------------
 echo.
 echo  ---------------------------------------------------------------------------
-echo   ITEM 3 of 4:  Python bytecode caches ^(__pycache__^)
+echo   ITEM 3 of 5:  Python bytecode caches ^(__pycache__^)
 echo  ---------------------------------------------------------------------------
 echo.
 echo     What:  Compiled bytecode Python generates automatically while running.
@@ -153,7 +153,7 @@ if /i "%D3%"=="y" (
 REM ---------------------------------------------------------------------------
 echo.
 echo  ---------------------------------------------------------------------------
-echo   ITEM 4 of 4:  Python itself
+echo   ITEM 4 of 5:  Python itself
 echo  ---------------------------------------------------------------------------
 echo.
 
@@ -175,6 +175,36 @@ if errorlevel 1 (
   set /p "D4=    Uninstall Python? [y/N] "
   if /i "!D4!"=="y" (
     winget uninstall --id Python.Python.3.12 -e
+    echo     Done.
+    set /a REMOVED+=1
+  ) else (
+    echo     Kept.
+    set /a KEPT+=1
+  )
+)
+
+REM ---------------------------------------------------------------------------
+echo.
+echo  ---------------------------------------------------------------------------
+echo   ITEM 5 of 5:  nmap
+echo  ---------------------------------------------------------------------------
+echo.
+
+findstr /C:"INSTALLED_NMAP=1" "%MANIFEST%" >nul 2>&1
+if errorlevel 1 (
+  echo     nmap was not installed by setup.bat, so this script will not touch it.
+) else (
+  echo     setup.bat installed nmap using winget.
+  echo.
+  echo     nmap is a general-purpose tool. You may well want it independently
+  echo     of this project, and other software may have started using it.
+  echo.
+  echo     The exact command that would run is:
+  echo       winget uninstall --id Insecure.Nmap -e
+  echo.
+  set /p "D5=    Remove nmap? [y/N] "
+  if /i "!D5!"=="y" (
+    winget uninstall --id Insecure.Nmap -e
     echo     Done.
     set /a REMOVED+=1
   ) else (
