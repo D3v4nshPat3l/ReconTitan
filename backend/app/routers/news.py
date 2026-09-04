@@ -68,9 +68,11 @@ RSS_SOURCES = [
         "cat":  "vulns",
     },
     {
-        "key":  "nvd",
-        "name": "NVD CVE FEED",
-        "url":  "https://nvd.nist.gov/feeds/xml/cve/misc/nvd-rss.xml",
+        # NVD retired its RSS feeds; the old nvd-rss.xml now 404s, which showed
+        # up as a warning on every refresh. This carries the same CVE stream.
+        "key":  "cvefeed",
+        "name": "CVE FEED",
+        "url":  "https://cvefeed.io/rssfeed/latest.xml",
         "cat":  "vulns",
     },
 ]
