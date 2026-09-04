@@ -23,23 +23,44 @@
   --muted: #9a9daa;
   --faint: #6b6e7b;
 
-  --accent:      #7c85ff;
-  --accent-dim:  #5a63d6;
-  --accent-wash: rgba(124, 133, 255, .10);
+  /* Same accent as the rest of the site. See docs/DESIGN.md. */
+  --accent:      #ee7501;
+  --accent-dim:  #f9922f;
+  --accent-wash: rgba(238, 117, 1, .10);
   --cyan:        #22d3ee;
 
-  --critical: #ff5c5c;
-  --high:     #ff8f4d;
-  --medium:   #f0b429;
-  --low:      #63b3ed;
-  --info:     #7d8496;
-  --ok:       #4ade80;
+  /* Severity keeps its own ramp, deliberately apart from the accent: a
+     scanner cannot spend its only strong colour on decoration. Tuned for a
+     dark ground, so lighter than the light-surface values in DESIGN.md. */
+  --critical: #ff6a5e;
+  --high:     #ff9d4d;
+  --medium:   #f5c451;
+  --low:      #6ba8f5;
+  --info:     #8b8f9e;
+  --ok:       #5ddb92;
 
   --serif: 'Instrument Serif', Georgia, serif;
   --sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --mono:  'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 
-  --r: 10px;
+  /* The signature of this design: nothing is rounded. */
+  --r: 0;
+}
+
+/* The trail overlay, matching the rest of the site. Fixed to the viewport and
+   pointer-events:none, so every control underneath stays clickable. */
+#cursorCanvas {
+  position: fixed; inset: 0; width: 100vw; height: 100vh;
+  pointer-events: none; z-index: 90;
+}
+
+/* Headings take the display serif, as everywhere else on the site. The report
+   was set entirely in the body face, which made it read as a console dump
+   rather than as a document someone is meant to sit and read. */
+.wc-card-title, .modal-hdr h3, #modalTitle {
+  font-family: var(--serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -60,7 +81,7 @@ button { cursor: pointer; background: none; border: none; }
 ::selection { background: var(--accent); color: #fff; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: var(--bg); }
-*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; border: 2px solid var(--bg); }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 0; border: 2px solid var(--bg); }
 
 /* ── Top bar ─────────────────────────────────────────────────────────── */
 
@@ -88,7 +109,7 @@ button { cursor: pointer; background: none; border: none; }
   margin: 0 auto;
   padding: .3rem .8rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--surface);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -101,7 +122,7 @@ button { cursor: pointer; background: none; border: none; }
   font-size: .82rem;
   padding: .45rem .9rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--muted);
   white-space: nowrap;
   transition: .15s;
@@ -309,7 +330,7 @@ button { cursor: pointer; background: none; border: none; }
 .finding-item {
   padding: .7rem .9rem;
   margin-bottom: .4rem;
-  border-radius: 7px;
+  border-radius: 0;
   background: var(--surface-2);
   border-left: 2px solid var(--info);
   cursor: pointer;
@@ -339,7 +360,7 @@ button { cursor: pointer; background: none; border: none; }
   display: inline-block;
   padding: .1rem .45rem;
   border: 1px solid currentColor;
-  border-radius: 3px;
+  border-radius: 0;
   font-family: var(--mono);
   font-size: .64rem;
   letter-spacing: .06em;
@@ -359,7 +380,7 @@ button { cursor: pointer; background: none; border: none; }
   align-items: center;
   padding: .18rem .5rem;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--surface-2);
   font-family: var(--mono);
   font-size: .7rem;
@@ -432,7 +453,7 @@ button { cursor: pointer; background: none; border: none; }
 .exploited-badge {
   display: inline-block;
   padding: .1rem .45rem;
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--critical);
   color: #1a0505;
   font-family: var(--mono);
@@ -451,7 +472,7 @@ button { cursor: pointer; background: none; border: none; }
 .vuln-explain {
   margin-top: .7rem;
   padding: .8rem .9rem;
-  border-radius: 7px;
+  border-radius: 0;
   background: var(--surface-2);
   border-left: 2px solid var(--accent);
 }
@@ -483,7 +504,7 @@ button { cursor: pointer; background: none; border: none; }
 .empty-icon { font-size: 2rem; margin-bottom: .8rem; opacity: .5; }
 
 .progress-wrap { max-width: 460px; margin: 1.6rem auto 0; }
-.progress-bar-outer { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.progress-bar-outer { height: 3px; background: var(--line); border-radius: 0; overflow: hidden; }
 .progress-bar-inner { height: 100%; width: 0; background: var(--accent); transition: width .35s ease; }
 .progress-pct { margin-top: .6rem; font-family: var(--mono); font-size: .8rem; color: var(--muted); }
 .tool-pills { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: center; margin-top: 1.2rem; }
@@ -509,7 +530,7 @@ button { cursor: pointer; background: none; border: none; }
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--surface);
   box-shadow: 0 32px 90px rgba(0, 0, 0, .6);
   overflow: hidden;
@@ -526,7 +547,7 @@ button { cursor: pointer; background: none; border: none; }
 .modal-close {
   flex-shrink: 0;
   width: 30px; height: 30px;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--faint);
   font-size: 1.1rem;
   line-height: 1;
@@ -548,7 +569,7 @@ button { cursor: pointer; background: none; border: none; }
 .modal-evidence, .modal-rem, .modal-exploit {
   padding: .85rem 1rem;
   border: 1px solid var(--line-soft);
-  border-radius: 7px;
+  border-radius: 0;
   background: var(--bg);
   font-family: var(--mono);
   font-size: .8rem;
@@ -591,7 +612,7 @@ button { cursor: pointer; background: none; border: none; }
 .modal-ai-btn {
   padding: .5rem 1rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--muted);
   font-size: .84rem;
   transition: .15s;
