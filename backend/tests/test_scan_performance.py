@@ -428,17 +428,36 @@ def test_parallel_phase_is_fail_soft(_no_db, monkeypatch):
 
 
 def test_parallel_phase_actually_overlaps(_no_db, monkeypatch):
-    """Guards against the flag silently degrading to sequential execution."""
-    import time
+    """Guards against the flag silently degrading to sequential execution.
+
+    This used a wall-clock assertion. It failed on a busy GitHub runner even
+    though the executor submitted every tool concurrently, because thread
+    scheduling delayed the workers. A rendezvous directly tests overlap rather
+    than the speed of the runner.
+    """
+    import threading
 
     from app.tasks import scan_tasks
 
     monkeypatch.setattr(scan_tasks.settings, "SCAN_TOOL_CONCURRENCY", 8)
-    slow = [(f"t{i}", 10, lambda: (time.sleep(0.3), [])[1]) for i in range(8)]
-    started = time.monotonic()
-    scan_tasks._run_tools("scan_a", "recon", slow, parallel=True)
-    elapsed = time.monotonic() - started
-    assert elapsed < 1.2, f"8 x 0.3s tools took {elapsed:.2f}s; not running in parallel"
+    rendezvous = threading.Barrier(2)
+    overlapped = threading.Event()
+
+    def tool():
+        try:
+            rendezvous.wait(timeout=1)
+            overlapped.set()
+        except threading.BrokenBarrierError:
+            # A sequential implementation makes the first tool time out. The
+            # assertion below reports that deterministically without depending
+            # on CPU load or a runner's clock granularity.
+            pass
+        return []
+
+    scan_tasks._run_tools(
+        "scan_a", "recon", [("first", 10, tool), ("second", 10, tool)], parallel=True,
+    )
+    assert overlapped.is_set(), "parallel tools never overlapped"
 
 
 @pytest.mark.parametrize("phase,task_name", [("recon", "run_recon"), ("osint", "run_osint")])
