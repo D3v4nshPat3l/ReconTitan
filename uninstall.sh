@@ -18,6 +18,22 @@ MANIFEST="$ROOT/.recontitan-install.log"
 REMOVED=0
 KEPT=0
 
+# Same reason as setup.sh: on Windows the environment lives in .venv/Scripts,
+# so this script would report "not present" for a venv that is right there.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    cat <<'WRONGSHELL'
+
+  This is the macOS and Linux uninstaller, but it is running on Windows
+  (Git Bash / MSYS). Use the Windows one instead:
+
+      uninstall.bat
+
+WRONGSHELL
+    exit 1
+    ;;
+esac
+
 if [ -t 1 ]; then
   B=$'\033[1m'; OK=$'\033[32m'; WARN=$'\033[33m'; N=$'\033[0m'
 else
@@ -79,7 +95,7 @@ esac
 
 # --- 1. venv -----------------------------------------------------------------
 say ""; rule
-say "  ITEM 1 of 4:  Python environment (.venv)"
+say "  ITEM 1 of 5:  Python environment (.venv)"
 rule
 if [ -d "$VENV" ]; then
   say ""
@@ -108,7 +124,7 @@ fi
 
 # --- 2. .env -----------------------------------------------------------------
 say ""; rule
-say "  ITEM 2 of 4:  Configuration file (.env)"
+say "  ITEM 2 of 5:  Configuration file (.env)"
 rule
 if [ -f "$ROOT/.env" ]; then
   say ""
@@ -134,7 +150,7 @@ fi
 
 # --- 3. caches ---------------------------------------------------------------
 say ""; rule
-say "  ITEM 3 of 4:  Python bytecode caches (__pycache__)"
+say "  ITEM 3 of 5:  Python bytecode caches (__pycache__)"
 rule
 say ""
 info "What:  Compiled bytecode Python generates automatically while running."
@@ -154,7 +170,7 @@ fi
 
 # --- 4. Python ---------------------------------------------------------------
 say ""; rule
-say "  ITEM 4 of 4:  Python itself"
+say "  ITEM 4 of 5:  Python itself"
 rule
 say ""
 if [ -f "$MANIFEST" ] && grep -q "PYTHON_INSTALLED_BY_SETUP=1" "$MANIFEST" 2>/dev/null; then
@@ -174,6 +190,32 @@ else
   say ""
   info "This script will NOT touch it. Other software on your machine"
   info "almost certainly depends on it."
+fi
+
+# --- 5. nmap -----------------------------------------------------------------
+say ""; rule
+say "  ITEM 5 of 5:  nmap"
+rule
+say ""
+if [ -f "$MANIFEST" ] && grep -q "INSTALLED_NMAP=1" "$MANIFEST" 2>/dev/null; then
+  NMAP_CMD="$(grep '^NMAP_INSTALL_CMD=' "$MANIFEST" 2>/dev/null | cut -d= -f2-)"
+  info "setup.sh installed nmap with:"
+  info "  ${NMAP_CMD:-(command not recorded)}"
+  say ""
+  info "nmap is a general-purpose tool. You may well want it independently of"
+  info "this project, and other software may have started using it."
+  say ""
+  if ask "Remove nmap?"; then
+    REMOVE_CMD="$(printf '%s' "$NMAP_CMD" | sed 's/install -y/remove -y/; s/install/uninstall/; s/-S --noconfirm/-R --noconfirm/')"
+    info "Running: $REMOVE_CMD"
+    eval "$REMOVE_CMD" && good "Removed." || warn "Removal failed - remove it by hand if you still want it gone."
+    REMOVED=$((REMOVED+1))
+  else
+    info "Kept."
+    KEPT=$((KEPT+1))
+  fi
+else
+  info "nmap was not installed by setup.sh, so this script will not touch it."
 fi
 
 # --- Not touched -------------------------------------------------------------

@@ -34,9 +34,34 @@ fail() { printf '\n       %s%s%s\n\n' "$ERR" "$*" "$N"; exit 1; }
 
 OS="unknown"
 case "$(uname -s)" in
-  Darwin) OS="macos" ;;
-  Linux)  OS="linux" ;;
+  Darwin)                     OS="macos" ;;
+  Linux)                      OS="linux" ;;
+  MINGW*|MSYS*|CYGWIN*)       OS="windows" ;;
 esac
+
+# Git Bash and MSYS run this script perfectly happily on Windows, and then
+# every path assumption below is wrong: a Windows virtual environment puts its
+# interpreter in .venv/Scripts/python.exe, not .venv/bin/python. The check for
+# an existing environment therefore misses, venv is recreated over a working
+# one, and the install fails against a path that will never exist.
+#
+# Refusing here is the only safe answer. setup.bat knows the Windows layout.
+if [ "$OS" = "windows" ]; then
+  cat <<'WRONGSHELL'
+
+  This is the macOS and Linux installer, but it is running on Windows
+  (Git Bash / MSYS).
+
+  Windows virtual environments use a different layout, so this script would
+  overwrite a working .venv and then fail. Use the Windows installer instead:
+
+      setup.bat
+
+  Double-click it, or run it from PowerShell or Command Prompt.
+
+WRONGSHELL
+  exit 1
+fi
 
 # --- Banner ------------------------------------------------------------------
 cat <<BANNER
@@ -68,7 +93,9 @@ ${N}
 
     4. Create a .env configuration file if you do not have one.
 
-    5. Start the scanner at http://127.0.0.1:8000
+    5. Offer to install nmap, so port scanning stays on this machine.
+
+    6. Start the scanner at http://127.0.0.1:8000
 
   ${B}WHAT IT WILL NOT DO${N}
 
@@ -98,7 +125,7 @@ esac
 } > "$MANIFEST"
 
 # --- 1. Python ---------------------------------------------------------------
-step " [1/5] Checking for Python"
+step " [1/6] Checking for Python"
 
 PY_CMD=""
 for candidate in python3 python; do
@@ -160,7 +187,7 @@ else
 fi
 
 # --- 2. Virtual environment --------------------------------------------------
-step " [2/5] Creating the private Python environment"
+step " [2/6] Creating the private Python environment"
 
 if [ -x "$VENV/bin/python" ]; then
   info "Already exists, reusing it: .venv/"
@@ -176,7 +203,7 @@ fi
 VPY="$VENV/bin/python"
 
 # --- 3. Packages -------------------------------------------------------------
-step " [3/5] Installing Python packages into .venv"
+step " [3/6] Installing Python packages into .venv"
 info "These go inside .venv only. Your system Python is untouched."
 info "Reading the list from: backend/requirements.txt"
 say ""
@@ -194,8 +221,60 @@ echo "INSTALLED_PACKAGES=1" >> "$MANIFEST"
 say ""
 good "Packages installed."
 
+# --- 3b. nmap ----------------------------------------------------------------
+step " [4/6] Port scanner (nmap)"
+
+if command -v nmap >/dev/null 2>&1; then
+  good "Found: $(nmap --version 2>&1 | head -1)"
+else
+  info "nmap is not installed."
+  say ""
+  info "Without it, port scanning falls back to a third-party API that has to"
+  info "be told your target's address. With it, scanning stays on this machine."
+  say ""
+
+  NMAP_CMD=""
+  if [ "$OS" = "macos" ]; then
+    command -v brew >/dev/null 2>&1 && NMAP_CMD="brew install nmap"
+  elif command -v apt-get >/dev/null 2>&1; then
+    NMAP_CMD="sudo apt-get install -y nmap"
+  elif command -v dnf >/dev/null 2>&1; then
+    NMAP_CMD="sudo dnf install -y nmap"
+  elif command -v pacman >/dev/null 2>&1; then
+    NMAP_CMD="sudo pacman -S --noconfirm nmap"
+  elif command -v zypper >/dev/null 2>&1; then
+    NMAP_CMD="sudo zypper install -y nmap"
+  fi
+
+  if [ -z "$NMAP_CMD" ]; then
+    warn "No supported package manager found. Install nmap from https://nmap.org/download.html"
+    info "ReconTitan works without it; port scanning just uses the fallback."
+  else
+    info "The exact command that will run is:"
+    printf '         %s%s%s\n' "$B" "$NMAP_CMD" "$N"
+    say ""
+    info "This is a system-wide install and needs your password. Declining is"
+    info "fine - everything else still works."
+    say ""
+    printf '       Install nmap? [y/N] '
+    read -r DONMAP
+    case "$DONMAP" in
+      y|Y)
+        if eval "$NMAP_CMD"; then
+          echo "INSTALLED_NMAP=1" >> "$MANIFEST"
+          echo "NMAP_INSTALL_CMD=$NMAP_CMD" >> "$MANIFEST"
+          good "Installed: $(nmap --version 2>&1 | head -1)"
+        else
+          warn "nmap installation failed. Continuing without it."
+        fi
+        ;;
+      *) info "Skipped. Port scanning will use the fallback." ;;
+    esac
+  fi
+fi
+
 # --- 4. Configuration --------------------------------------------------------
-step " [4/5] Configuration"
+step " [5/6] Configuration"
 
 if [ -f "$ROOT/.env" ]; then
   info ".env already exists, leaving it exactly as it is."
@@ -208,7 +287,7 @@ else
 fi
 
 # --- 5. Run ------------------------------------------------------------------
-step " [5/5] Starting ReconTitan"
+step " [6/6] Starting ReconTitan"
 cat <<RUN
 
        The scanner will start at:
