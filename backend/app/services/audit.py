@@ -41,6 +41,7 @@ logger = logging.getLogger("recontitan.audit")
 SCAN_ACCEPTED = "scan.accepted"
 SCAN_REJECTED = "scan.rejected"
 SCAN_GATE_DENIED = "scan.gate_denied"
+SCAN_CANCELLED = "scan.cancelled"
 
 #: Attacker-facing events. These are coalesced.
 AUTH_FAILED = "auth.failed"

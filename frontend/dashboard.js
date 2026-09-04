@@ -51,6 +51,10 @@ const PROFILE_STEPS = {
 const DANGER_PHRASE = 'I am authorized';
 let dangerUnlocked = false;
 let dangerEnabledOnServer = null;
+let scanBusy = false;
+let activeScanId = '';
+let cancelRequestPending = false;
+let runtimeCapabilities = null;
 
 let scanCount = Number.parseInt(localStorage.getItem('rt_scan_count') || '0', 10) || 0;
 let selectedProfile = localStorage.getItem('rt_scan_profile') || 'full';
@@ -86,7 +90,7 @@ function refreshDangerGate() {
     dangerFeedback.dataset.state = 'locked';
   }
   if (selectedProfile === 'danger') {
-    scanBtn.disabled = !dangerUnlocked;
+    scanBtn.disabled = scanBusy || !dangerUnlocked;
     scanBtn.classList.toggle('danger-armed', dangerUnlocked);
   }
 }
@@ -103,7 +107,7 @@ function selectProfile(profile) {
   if (dangerGate) dangerGate.hidden = profile !== 'danger';
   document.body.classList.toggle('danger-selected', profile === 'danger');
   if (profile !== 'danger') {
-    scanBtn.disabled = false;
+    scanBtn.disabled = scanBusy;
     scanBtn.classList.remove('danger-armed');
   }
   refreshDangerGate();
@@ -127,6 +131,7 @@ document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
 
 const scanBtn = document.getElementById('scanBtn');
 const targetInput = document.getElementById('targetInput');
+const cancelScanBtn = document.getElementById('cancelScanBtn');
 
 // Applied after scanBtn exists because the gate toggles the scan button.
 selectProfile(selectedProfile);
@@ -146,12 +151,204 @@ function addLog(message) {
   log.scrollTop = log.scrollHeight;
 }
 
+function setScanBusy(busy) {
+  scanBusy = busy;
+  scanBtn.classList.toggle('loading', busy);
+  scanBtn.disabled = busy || (selectedProfile === 'danger' && !dangerUnlocked);
+  cancelScanBtn.hidden = !(busy && activeScanId);
+  if (!busy) {
+    cancelScanBtn.disabled = false;
+    cancelScanBtn.textContent = 'Cancel scan';
+  }
+}
+
+function wait(milliseconds) {
+  return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+}
+
+async function responseError(response) {
+  let detail = `Server returned ${response.status}`;
+  try {
+    const payload = await response.json();
+    detail = payload.detail || payload.error || payload.message || detail;
+  } catch (_) {
+    // Keep the status-based message when the server did not return JSON.
+  }
+  return String(detail);
+}
+
+function normalizeReportData(data) {
+  const normalized = { ...data };
+  normalized.severity_counts = normalized.severity_counts || {
+    critical: normalized.critical_count || 0,
+    high: normalized.high_count || 0,
+    medium: normalized.medium_count || 0,
+    low: normalized.low_count || 0,
+    info: normalized.info_count || 0,
+  };
+  normalized.total_time_seconds = normalized.total_time_seconds ?? normalized.duration_seconds ?? 0;
+  normalized.tools_run = normalized.tools_run ?? (normalized.tools_used || []).length;
+  if (!normalized.ai_summary && normalized.summary) {
+    normalized.ai_summary = { executive_summary: normalized.summary };
+  }
+  return normalized;
+}
+
+function phaseLabel(value) {
+  const labels = {
+    recon: 'Reconnaissance',
+    osint: 'OSINT and web analysis',
+    portscan: 'Port exposure scan',
+    vulnscan: 'Vulnerability correlation',
+    danger: 'Danger Mode probes',
+    ai_analysis: 'AI summary and report',
+  };
+  return labels[value] || String(value || 'Queued').replaceAll('_', ' ');
+}
+
+async function runSynchronousFallback(target, profile, reason = '') {
+  activeScanId = '';
+  cancelScanBtn.hidden = true;
+  if (reason) addLog(`Queue unavailable: ${reason}`);
+  addLog('Running compatibility scan in this request; live per-tool status is unavailable.');
+  const startedAt = Date.now();
+  setProgress(5, 'Compatibility scan running...');
+  const elapsedTicker = window.setInterval(() => {
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    setProgress(5, `Compatibility scan running... (${elapsed}s)`);
+  }, 1000);
+
+  let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(profile)}`;
+  if (profile === 'danger') {
+    url += `&danger_acknowledgement=${encodeURIComponent(DANGER_PHRASE)}`;
+  }
+  try {
+    const response = await apiFetch(url);
+    if (!response.ok) throw new Error(await responseError(response));
+    return normalizeReportData(await response.json());
+  } finally {
+    window.clearInterval(elapsedTicker);
+  }
+}
+
+async function pollQueuedScan(scanId, startedAt) {
+  const seenCompleted = new Set();
+  let runningSignature = '';
+
+  while (activeScanId === scanId) {
+    const response = await apiFetch(`/api/scan/${encodeURIComponent(scanId)}/status`);
+    if (!response.ok) throw new Error(await responseError(response));
+    const status = await response.json();
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    setProgress(status.progress || 0, `${phaseLabel(status.phase)} (${elapsed}s)`);
+
+    for (const tool of status.tools_completed || []) {
+      if (!seenCompleted.has(tool)) {
+        seenCompleted.add(tool);
+        addLog(`✓ ${tool} completed`);
+      }
+    }
+    const running = (status.tools_running || []).join(', ');
+    if (running && running !== runningSignature) {
+      runningSignature = running;
+      addLog(`→ Running: ${running}`);
+    }
+
+    if (status.status === 'completed') {
+      const report = await apiFetch(`/api/scan/${encodeURIComponent(scanId)}/report`);
+      if (!report.ok) throw new Error(await responseError(report));
+      return normalizeReportData(await report.json());
+    }
+    if (status.status === 'failed') {
+      throw new Error(status.error || 'The scan worker reported a failure.');
+    }
+    if (status.status === 'cancelled') {
+      addLog('Scan cancelled. Findings completed before cancellation remain stored.');
+      localStorage.removeItem('rt_active_scan');
+      activeScanId = '';
+      setProgress(status.progress || 0, 'Cancelled');
+      setScanBusy(false);
+      return null;
+    }
+    await wait(1500);
+  }
+  return null;
+}
+
+async function queueOrRunScan(target, profile) {
+  if (runtimeCapabilities && runtimeCapabilities.async_scans === false) {
+    return runSynchronousFallback(target, profile, 'this deployment does not run background workers');
+  }
+
+  const payload = { target, scan_type: profile };
+  if (profile === 'danger') payload.danger_acknowledgement = DANGER_PHRASE;
+  const response = await apiFetch('/api/scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const detail = await responseError(response);
+    if (response.status === 503 && /\/api\/test-scan|synchronous scan/i.test(detail)) {
+      return runSynchronousFallback(target, profile, detail);
+    }
+    throw new Error(detail);
+  }
+
+  const accepted = await response.json();
+  activeScanId = accepted.scan_id;
+  cancelScanBtn.hidden = false;
+  localStorage.setItem('rt_active_scan', JSON.stringify({
+    scan_id: activeScanId,
+    target: accepted.target || target,
+    scan_type: profile,
+  }));
+  addLog(`Queued as ${activeScanId}. Progress now comes from the worker.`);
+  return pollQueuedScan(activeScanId, Date.now());
+}
+
+function openCompletedReport(data, fallbackTarget, fallbackProfile) {
+  const normalized = normalizeReportData(data);
+  const target = normalized.target || fallbackTarget;
+  const profile = normalized.scan_type || fallbackProfile;
+  setProgress(100, 'Assessment complete');
+  addLog(`✓ ${normalized.tools_run} modules completed with ${normalized.total_findings} findings in ${normalized.total_time_seconds}s`);
+
+  Object.entries(normalized.tool_results || {}).forEach(([tool, result]) => {
+    const status = result.status === 'ok' ? '✓' : '✗';
+    addLog(`${status} ${tool}: ${result.findings ?? '—'} finding(s), ${result.time_seconds ?? '—'}s`);
+  });
+  if (normalized.ai_summary?.risk_level) addLog(`AI risk level: ${normalized.ai_summary.risk_level}`);
+  logDangerTelemetry(normalized.danger_summary);
+
+  scanCount += 1;
+  localStorage.setItem('rt_scan_count', String(scanCount));
+  localStorage.removeItem('rt_active_scan');
+  document.getElementById('hsScans').textContent = String(scanCount);
+  try {
+    sessionStorage.setItem('rt_scan_target', target);
+    sessionStorage.setItem('rt_scan_profile', profile);
+    sessionStorage.setItem('rt_scan_data', JSON.stringify(normalized));
+  } catch (_) {
+    addLog('Browser cache is full; the report will be loaded from persistent scan storage.');
+  }
+  activeScanId = '';
+  cancelScanBtn.hidden = true;
+  addLog('Opening the persisted interactive report...');
+  window.setTimeout(() => {
+    const query = new URLSearchParams({ target, scan_type: profile, cached: '1' });
+    if (normalized.scan_id && normalized.scan_id.startsWith('scan_')) query.set('scan_id', normalized.scan_id);
+    window.location.href = `/report.html?${query.toString()}`;
+  }, 500);
+}
+
 scanBtn.addEventListener('click', startScan);
 targetInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') startScan();
 });
 
 async function startScan() {
+  if (scanBusy) return;
   const target = targetInput.value.trim();
   if (!target) {
     targetInput.focus();
@@ -166,80 +363,92 @@ async function startScan() {
     return;
   }
 
-  scanBtn.classList.add('loading');
-  scanBtn.disabled = true;
+  setScanBusy(true);
   const progress = document.getElementById('scanProgress');
   progress.hidden = false;
   document.getElementById('progressLog').replaceChildren();
   setProgress(1, 'Validating target...');
   addLog(`Profile selected: ${selectedProfile}`);
 
-  const steps = PROFILE_STEPS[selectedProfile];
-  const startedAt = Date.now();
-  const elapsed = () => Math.round((Date.now() - startedAt) / 1000);
-  let stepIndex = 0;
-  // Danger Mode runs many more modules, so its steps advance more slowly and the
-  // ticker keeps reporting elapsed time after the named steps are exhausted.
-  // Without that the bar froze at 92% and the scan looked hung.
-  const stepInterval = selectedProfile === 'danger' ? 2600 : 950;
-  const timer = window.setInterval(() => {
-    if (stepIndex < steps.length) {
-      const percent = Math.min(92, Math.round(((stepIndex + 1) / (steps.length + 1)) * 92));
-      const label = steps[stepIndex];
-      setProgress(percent, `${label}... (${elapsed()}s)`);
-      addLog(`→ ${label}`);
-      stepIndex += 1;
-      return;
-    }
-    setProgress(92, `Finalizing findings and report... (${elapsed()}s)`);
-  }, stepInterval);
-
   try {
-    let requestUrl = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(selectedProfile)}`;
     if (selectedProfile === 'danger') {
-      requestUrl += `&danger_acknowledgement=${encodeURIComponent(DANGER_PHRASE)}`;
       addLog('☣ Danger Mode armed — bounded simulation traffic only, all results are candidates');
     }
-    const response = await apiFetch(requestUrl);
-    window.clearInterval(timer);
-    if (!response.ok) {
-      let detail = `Server returned ${response.status}`;
-      try {
-        const payload = await response.json();
-        detail = payload.detail || payload.error || detail;
-      } catch (_) {
-        // Keep status-based message.
-      }
-      throw new Error(detail);
-    }
-    const data = await response.json();
-    setProgress(100, 'Assessment complete');
-    addLog(`✓ ${data.tools_run} modules completed with ${data.total_findings} findings in ${data.total_time_seconds}s`);
-
-    Object.entries(data.tool_results || {}).forEach(([tool, result]) => {
-      const status = result.status === 'ok' ? '✓' : '✗';
-      addLog(`${status} ${tool}: ${result.findings ?? 0} finding(s), ${result.time_seconds ?? '—'}s`);
-    });
-    if (data.ai_summary?.risk_level) addLog(`AI risk level: ${data.ai_summary.risk_level}`);
-    logDangerTelemetry(data.danger_summary);
-
-    scanCount += 1;
-    localStorage.setItem('rt_scan_count', String(scanCount));
-    document.getElementById('hsScans').textContent = String(scanCount);
-
-    sessionStorage.setItem('rt_scan_target', data.target || target);
-    sessionStorage.setItem('rt_scan_profile', data.scan_type || selectedProfile);
-    sessionStorage.setItem('rt_scan_data', JSON.stringify(data));
-    addLog('Opening the interactive report...');
-    window.setTimeout(() => {
-      window.location.href = `/report.html?target=${encodeURIComponent(data.target || target)}&scan_type=${encodeURIComponent(data.scan_type || selectedProfile)}&cached=1`;
-    }, 500);
+    const data = await queueOrRunScan(target, selectedProfile);
+    if (data) openCompletedReport(data, target, selectedProfile);
   } catch (error) {
-    window.clearInterval(timer);
+    localStorage.removeItem('rt_active_scan');
+    activeScanId = '';
     setProgress(0, `Error: ${error.message}`);
     addLog(`✗ ${error.message}`);
-    scanBtn.classList.remove('loading');
-    scanBtn.disabled = false;
+    setScanBusy(false);
+  }
+}
+
+cancelScanBtn.addEventListener('click', async () => {
+  if (!activeScanId || cancelRequestPending) return;
+  cancelRequestPending = true;
+  cancelScanBtn.disabled = true;
+  cancelScanBtn.textContent = 'Cancelling...';
+  const scanId = activeScanId;
+  try {
+    const response = await apiFetch(`/api/scan/${encodeURIComponent(scanId)}/cancel`, { method: 'POST' });
+    if (!response.ok) throw new Error(await responseError(response));
+    const result = await response.json();
+    if (result.status === 'completed') {
+      addLog('The scan completed before cancellation reached the worker.');
+      cancelScanBtn.textContent = 'Completed';
+    } else if (result.status === 'failed') {
+      addLog('The scan failed before cancellation reached the worker.');
+      activeScanId = '';
+      localStorage.removeItem('rt_active_scan');
+      setProgress(0, 'Scan failed');
+      setScanBusy(false);
+    } else if (result.status === 'cancelled') {
+      addLog(result.message || 'Cancellation requested.');
+      activeScanId = '';
+      localStorage.removeItem('rt_active_scan');
+      setProgress(Number.parseInt(document.getElementById('progressPct').textContent, 10) || 0, 'Cancelled');
+      setScanBusy(false);
+    } else {
+      throw new Error(`Unexpected cancellation state: ${result.status || 'unknown'}`);
+    }
+  } catch (error) {
+    addLog(`✗ Could not cancel: ${error.message}`);
+    cancelScanBtn.disabled = false;
+    cancelScanBtn.textContent = 'Cancel scan';
+  } finally {
+    cancelRequestPending = false;
+  }
+});
+
+async function resumeActiveScan() {
+  let saved;
+  try {
+    saved = JSON.parse(localStorage.getItem('rt_active_scan') || 'null');
+  } catch (_) {
+    localStorage.removeItem('rt_active_scan');
+    return;
+  }
+  if (!saved || !/^scan_[a-f0-9]{12}$/.test(saved.scan_id || '')) return;
+
+  activeScanId = saved.scan_id;
+  targetInput.value = saved.target || '';
+  if (PROFILE_STEPS[saved.scan_type]) selectProfile(saved.scan_type);
+  document.getElementById('scanProgress').hidden = false;
+  document.getElementById('progressLog').replaceChildren();
+  setScanBusy(true);
+  cancelScanBtn.hidden = false;
+  addLog(`Resuming live status for ${activeScanId}.`);
+  try {
+    const data = await pollQueuedScan(activeScanId, Date.now());
+    if (data) openCompletedReport(data, saved.target || '', saved.scan_type || 'full');
+  } catch (error) {
+    localStorage.removeItem('rt_active_scan');
+    activeScanId = '';
+    setProgress(0, `Error: ${error.message}`);
+    addLog(`✗ ${error.message}`);
+    setScanBusy(false);
   }
 }
 
@@ -272,6 +481,7 @@ async function loadCapabilities() {
     const response = await fetch('/api/capabilities');
     if (!response.ok) return;
     const payload = await response.json();
+    runtimeCapabilities = payload.runtime || null;
     if (payload.version) document.getElementById('versionPill').textContent = `v${payload.version}`;
     const full = (payload.profiles || []).find((profile) => profile.key === 'full');
     if (full?.tool_count) document.getElementById('moduleCount').textContent = `${full.tool_count}+`;
@@ -291,7 +501,7 @@ async function loadCapabilities() {
     // Static copy remains a complete fallback.
   }
 }
-loadCapabilities();
+loadCapabilities().finally(resumeActiveScan);
 
 let currentCat = 'all';
 let newsCache = null;

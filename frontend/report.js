@@ -1394,13 +1394,6 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('moda
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modal').style.display = 'none'; });
 
 // ── SCAN EXECUTION ─────────────────────────────────────────
-const PHASES = [
-  [8,'WHOIS lookup'],[14,'DNS enumeration'],[20,'Certificate Transparency'],
-  [24,'IP Geolocation'],[30,'HTTP probe'],[36,'Technology detection'],
-  [42,'Favicon hash lookup'],[48,'JavaScript analysis'],[54,'Subdomain takeover'],
-  [60,'Security headers analysis'],[66,'SSL/TLS check'],[71,'robots.txt scan'],
-  [76,'CORS test'],[81,'Cookie flags'],[86,'WAF detection'],[92,'Building report'],
-];
 const TOOLS = ['whois','dns_lookup','crt.sh','ipinfo','httpx_probe','tech_stack','favicon_hash',
                'js_analysis','subdomain_takeover','security_headers','ssl_check','robots_sitemap',
                'cors_check','cookie_check','waf_detect'];
@@ -1423,6 +1416,115 @@ function updateToolPill(name, state) {
   pill.className = `tool-pill ${state}`;
 }
 
+function wait(milliseconds) {
+  return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+}
+
+async function responseError(response) {
+  let detail = `Server returned ${response.status}`;
+  try {
+    const payload = await response.json();
+    detail = payload.detail || payload.error || payload.message || detail;
+  } catch (_) {
+    // Preserve the status-based message for non-JSON responses.
+  }
+  return String(detail);
+}
+
+function normalizeReportData(data) {
+  const normalized = { ...data };
+  normalized.severity_counts = normalized.severity_counts || {
+    critical: normalized.critical_count || 0,
+    high: normalized.high_count || 0,
+    medium: normalized.medium_count || 0,
+    low: normalized.low_count || 0,
+    info: normalized.info_count || 0,
+  };
+  normalized.total_time_seconds = normalized.total_time_seconds ?? normalized.duration_seconds ?? 0;
+  normalized.tools_run = normalized.tools_run ?? (normalized.tools_used || []).length;
+  if (!normalized.ai_summary && normalized.summary) {
+    normalized.ai_summary = { executive_summary: normalized.summary };
+  }
+  return normalized;
+}
+
+function phaseLabel(value) {
+  const labels = {
+    recon: 'Reconnaissance',
+    osint: 'OSINT and web analysis',
+    portscan: 'Port exposure scan',
+    vulnscan: 'Vulnerability correlation',
+    danger: 'Danger Mode probes',
+    ai_analysis: 'AI summary and report',
+  };
+  return labels[value] || String(value || 'Queued').replaceAll('_', ' ');
+}
+
+function showReport(data) {
+  const normalized = normalizeReportData(data);
+  setProgress(100, 'Complete!');
+  $('loadingState').style.display = 'none';
+  renderReport(normalized);
+  window._scanData = normalized;
+  try {
+    sessionStorage.setItem('rt_scan_target', normalized.target || '');
+    sessionStorage.setItem('rt_scan_profile', normalized.scan_type || 'full');
+    sessionStorage.setItem('rt_scan_data', JSON.stringify(normalized));
+  } catch (_) {
+    // The persisted scan ID remains sufficient to reload and export the report.
+  }
+}
+
+async function fetchPersistedReport(scanId) {
+  const response = await apiFetch(`/api/scan/${encodeURIComponent(scanId)}/report`);
+  if (!response.ok) throw new Error(await responseError(response));
+  return normalizeReportData(await response.json());
+}
+
+async function pollQueuedScan(scanId) {
+  const startedAt = Date.now();
+  const completed = new Set();
+  while (true) {
+    const response = await apiFetch(`/api/scan/${encodeURIComponent(scanId)}/status`);
+    if (!response.ok) throw new Error(await responseError(response));
+    const status = await response.json();
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    setProgress(status.progress || 0, `${phaseLabel(status.phase)} (${elapsed}s)`);
+    (status.tools_completed || []).forEach(tool => {
+      completed.add(tool);
+      updateToolPill(tool, 'done');
+    });
+    (status.tools_running || []).forEach(tool => {
+      if (!completed.has(tool)) updateToolPill(tool, 'running');
+    });
+
+    if (status.status === 'completed') return fetchPersistedReport(scanId);
+    if (status.status === 'failed') throw new Error(status.error || 'The scan worker reported a failure.');
+    if (status.status === 'cancelled') throw new Error('This scan was cancelled.');
+    await wait(1500);
+  }
+}
+
+async function runSynchronousFallback(target, scanType, acknowledgement, reason) {
+  const loadingSub = $('loadingSub');
+  if (loadingSub) loadingSub.textContent = `Compatibility mode: ${reason}`;
+  const startedAt = Date.now();
+  setProgress(5, 'Compatibility scan running...');
+  const ticker = window.setInterval(() => {
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    setProgress(5, `Compatibility scan running... (${elapsed}s)`);
+  }, 1000);
+  let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(scanType)}`;
+  if (acknowledgement) url += `&danger_acknowledgement=${encodeURIComponent(acknowledgement)}`;
+  try {
+    const response = await apiFetch(url);
+    if (!response.ok) throw new Error(await responseError(response));
+    return normalizeReportData(await response.json());
+  } finally {
+    window.clearInterval(ticker);
+  }
+}
+
 async function runScan(target, scanType = 'full') {
   $('loadingState').style.display = 'flex';
   $('reportGrid').style.display   = 'none';
@@ -1433,40 +1535,62 @@ async function runScan(target, scanType = 'full') {
   const loadingSub = $('loadingSub');
   if (loadingSub) loadingSub.textContent = `Running ${scanType.replaceAll('_', ' ')} modules with bounded network access`;
 
-  let pi = 0;
-  const timer = setInterval(() => {
-    if (pi < PHASES.length) {
-      const [pct, label] = PHASES[pi++];
-      setProgress(pct, label + '...');
-      if (pi <= TOOLS.length) updateToolPill(TOOLS[pi-1], 'running');
-      if (pi > 1 && pi-2 < TOOLS.length) updateToolPill(TOOLS[pi-2], 'done');
-    } else clearInterval(timer);
-  }, 700);
-
   try {
-    let url = `/api/test-scan?target=${encodeURIComponent(target)}&scan_type=${encodeURIComponent(scanType)}`;
+    let acknowledgement = '';
     if (scanType === 'danger') {
       // Re-running a danger scan from a report link still requires the typed
       // acknowledgement; without it the API returns 403 by design.
       const supplied = window.prompt('Danger Mode requires authorization. Type: I am authorized');
-      if (supplied === null) { clearInterval(timer); $('loadingText').textContent = 'Danger scan cancelled.'; return; }
-      url += `&danger_acknowledgement=${encodeURIComponent(supplied.trim())}`;
+      if (supplied === null) { $('loadingText').textContent = 'Danger scan cancelled.'; return; }
+      acknowledgement = supplied.trim();
     }
-    const res = await apiFetch(url);
-    clearInterval(timer);
-    TOOLS.forEach(t => updateToolPill(t, 'done'));
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    setProgress(100, 'Complete!');
-    await new Promise(r => setTimeout(r, 400));
-    $('loadingState').style.display = 'none';
-    renderReport(data);
-    // Store for export
-    window._scanData = data;
+    const payload = { target, scan_type: scanType };
+    if (acknowledgement) payload.danger_acknowledgement = acknowledgement;
+    const response = await apiFetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    let data;
+    if (!response.ok) {
+      const detail = await responseError(response);
+      if (response.status === 503 && /\/api\/test-scan|synchronous scan/i.test(detail)) {
+        data = await runSynchronousFallback(target, scanType, acknowledgement, detail);
+      } else {
+        throw new Error(detail);
+      }
+    } else {
+      const accepted = await response.json();
+      const query = new URLSearchParams(window.location.search);
+      query.set('scan_id', accepted.scan_id);
+      query.set('target', accepted.target || target);
+      query.set('scan_type', scanType);
+      window.history.replaceState(null, '', `${window.location.pathname}?${query.toString()}`);
+      if (loadingSub) loadingSub.textContent = `Queued as ${accepted.scan_id}; progress is reported by the worker`;
+      data = await pollQueuedScan(accepted.scan_id);
+    }
+    showReport(data);
   } catch(err) {
-    clearInterval(timer);
     $('loadingText').textContent = `Error: ${err.message}`;
     console.error('[ReconTitan]', err);
+  }
+}
+
+async function loadPersistedScan(scanId, cachedData = null) {
+  $('loadingState').style.display = 'flex';
+  $('reportGrid').style.display = 'none';
+  $('emptyReport').style.display = 'none';
+  setProgress(0, 'Loading persisted scan...');
+  try {
+    const data = await pollQueuedScan(scanId);
+    showReport(data);
+  } catch (error) {
+    if (cachedData && cachedData.scan_id === scanId && cachedData.status === 'completed') {
+      showReport(cachedData);
+      return;
+    }
+    $('loadingText').textContent = `Error: ${error.message}`;
+    console.error('[ReconTitan]', error);
   }
 }
 
@@ -1536,21 +1660,29 @@ $('btnExportPdf').addEventListener('click', async () => {
 (function init() {
   const params = new URLSearchParams(window.location.search);
   const target = params.get('target');
+  const scanId = params.get('scan_id');
   const scanType = params.get('scan_type') || sessionStorage.getItem('rt_scan_profile') || 'full';
   const cachedRequested = params.get('cached') === '1';
   const storedTarget = sessionStorage.getItem('rt_scan_target');
   const storedData = sessionStorage.getItem('rt_scan_data');
 
+  let cachedData = null;
   if (storedData && (!target || storedTarget === target) && (cachedRequested || storedTarget === target)) {
     try {
-      const data = JSON.parse(storedData);
-      $('loadingState').style.display = 'none';
-      renderReport(data);
-      window._scanData = data;
-      return;
+      cachedData = normalizeReportData(JSON.parse(storedData));
     } catch (_) {
       sessionStorage.removeItem('rt_scan_data');
     }
+  }
+
+  if (scanId && /^scan_[a-f0-9]{12}$/.test(scanId)) {
+    loadPersistedScan(scanId, cachedData);
+    return;
+  }
+
+  if (cachedData) {
+    showReport(cachedData);
+    return;
   }
 
   if (target) {

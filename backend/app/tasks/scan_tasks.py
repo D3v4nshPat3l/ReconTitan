@@ -46,6 +46,21 @@ from app.tasks.vulnscan.vuln_tools import (
 logger = logging.getLogger("recontitan.tasks")
 
 
+def _scan_cancelled(scan_id: str) -> bool:
+    """Return whether the durable scan record requests cancellation."""
+    db = get_db()
+    if db is None:
+        return False
+    record = db["scans"].find_one(
+        {"scan_id": scan_id},
+        {"_id": 0, "status": 1, "cancel_requested": 1},
+    ) or {}
+    return bool(
+        record.get("cancel_requested")
+        or record.get("status") == "cancelled"
+    )
+
+
 def _validated_task_target(target: str) -> str:
     """Revalidate queued targets at execution time to resist stale/rebound DNS."""
     ok, normalized, error = validate_scan_target(target, resolve_dns=True)
@@ -56,20 +71,34 @@ def _validated_task_target(target: str) -> str:
 
 @celery_app.task(bind=True, name="app.tasks.scan_tasks.orchestrate_scan")
 def orchestrate_scan(self, scan_id: str, target: str, scan_type: str):
-    target = _validated_task_target(target)
-    logger.info("[%s] scan started for %s (%s)", scan_id, target, scan_type)
-    _update_scan_status(scan_id, "running", phase="recon", progress=2, started=True)
     try:
+        if _scan_cancelled(scan_id):
+            return {"scan_id": scan_id, "status": "cancelled"}
+        target = _validated_task_target(target)
+        logger.info("[%s] scan started for %s (%s)", scan_id, target, scan_type)
+        _update_scan_status(scan_id, "running", phase="recon", progress=2, started=True)
         if scan_type in {"full", "recon_only", "danger"}:
             run_recon.run(scan_id, target)
+        if _scan_cancelled(scan_id):
+            return {"scan_id": scan_id, "status": "cancelled"}
         if scan_type in {"full", "osint_only", "danger"}:
             run_osint.run(scan_id, target)
+        if _scan_cancelled(scan_id):
+            return {"scan_id": scan_id, "status": "cancelled"}
         if scan_type in {"full", "vuln_only", "danger"}:
             run_portscan.run(scan_id, target)
+            if _scan_cancelled(scan_id):
+                return {"scan_id": scan_id, "status": "cancelled"}
             run_vuln_scan.run(scan_id, target)
+        if _scan_cancelled(scan_id):
+            return {"scan_id": scan_id, "status": "cancelled"}
         if scan_type == "danger":
             run_danger_scan.run(scan_id, target)
+        if _scan_cancelled(scan_id):
+            return {"scan_id": scan_id, "status": "cancelled"}
         run_ai_analysis.run(scan_id)
+        if _scan_cancelled(scan_id):
+            return {"scan_id": scan_id, "status": "cancelled"}
         logger.info("[%s] scan complete", scan_id)
         return {"scan_id": scan_id, "status": "completed"}
     except SoftTimeLimitExceeded:
@@ -283,6 +312,8 @@ def _run_tools_sequential(
 ) -> list[dict]:
     all_raw: list[dict] = []
     for tool_name, progress, tool_fn in tools:
+        if _scan_cancelled(scan_id):
+            break
         _update_scan_status(scan_id, "running", phase=phase, progress=progress, tools_running=[tool_name])
         results, ok = _invoke(scan_id, tool_name, tool_fn)
         all_raw.extend(results)
@@ -305,6 +336,8 @@ def _run_tools_parallel(
     completed: list[str] | None,
     failed: list[str] | None,
 ) -> list[dict]:
+    if _scan_cancelled(scan_id):
+        return []
     names = [name for name, _, _ in tools]
     _update_scan_status(scan_id, "running", phase=phase, progress=tools[0][1], tools_running=names)
     workers = min(settings.SCAN_TOOL_CONCURRENCY, len(tools))
@@ -416,4 +449,7 @@ def _update_scan_status(
     if tools_completed:
         update["$addToSet"] = {"tools_completed": {"$each": tools_completed}}
         update["$pullAll"] = {"tools_remaining": tools_completed}
-    db["scans"].update_one({"scan_id": scan_id}, update)
+    db["scans"].update_one(
+        {"scan_id": scan_id, "status": {"$ne": "cancelled"}},
+        update,
+    )

@@ -299,7 +299,15 @@ section { padding-block: var(--s9); }
   display: flex; justify-content: space-between; align-items: baseline;
   font-size: .875rem; margin-bottom: var(--s3);
 }
+.progress-meta { display: inline-flex; align-items: center; gap: var(--s3); }
 .progress-pct { font-family: var(--mono); color: var(--muted); }
+.progress-cancel {
+  border: 0; padding: 0; background: transparent; color: var(--sev-high);
+  font: 600 .7rem/1 var(--mono); text-transform: uppercase;
+  letter-spacing: .06em; cursor: pointer;
+}
+.progress-cancel:hover:not(:disabled) { text-decoration: underline; }
+.progress-cancel:disabled { opacity: .5; cursor: wait; }
 .progress-track { height: 2px; background: var(--line); overflow: hidden; }
 .progress-fill { height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
 .progress-log {

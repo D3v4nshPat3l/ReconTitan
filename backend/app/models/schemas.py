@@ -157,6 +157,7 @@ class ScanStatusResponse(BaseModel):
     tools_remaining: list[str] = Field(default_factory=list)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    error: Optional[str] = None
 
 
 class Finding(BaseModel):
@@ -257,6 +258,10 @@ class ScanReport(BaseModel):
     tools_used: list[str] = Field(default_factory=list)
     tool_results: dict[str, Any] = Field(default_factory=dict)
     danger_summary: Optional[dict[str, Any]] = None
+    ai_summary: Optional[dict[str, Any]] = None
+    severity_counts: dict[str, int] = Field(default_factory=dict)
+    total_time_seconds: Optional[int] = None
+    tools_run: int = 0
     total_findings: int = 0
     critical_count: int = 0
     high_count: int = 0
