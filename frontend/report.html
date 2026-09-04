@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=23">
+<link rel="stylesheet" href="report.css?v=25">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
@@ -31,7 +31,26 @@
   <div class="report-head-copy">
     <p class="report-eyebrow">External attack surface report</p>
     <h1 class="report-title" id="reportTitle">—</h1>
-    <p class="report-sub">Every finding below carries the evidence it was derived from. Anything inferred rather than proven is labelled a candidate.</p>
+    <p class="report-sub">
+      Everything this host shows the internet, gathered without credentials and
+      without touching anything on the far side. Every finding below carries the
+      evidence it was derived from; anything inferred rather than proven is
+      labelled a candidate for manual validation.
+    </p>
+    <dl class="report-facts">
+      <div>
+        <dt>Method</dt>
+        <dd>Deterministic checks</dd>
+      </div>
+      <div>
+        <dt>Evidence</dt>
+        <dd>Attached to every finding</dd>
+      </div>
+      <div>
+        <dt>Confidence</dt>
+        <dd>Candidate until validated</dd>
+      </div>
+    </dl>
   </div>
   <div class="report-head-visual" aria-hidden="true">
     <canvas id="reportGlobe" data-globe="light"></canvas>

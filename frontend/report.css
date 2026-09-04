@@ -16,11 +16,11 @@
   /* Same surfaces as the rest of the site — see docs/DESIGN.md. The report
      used to be a dark console; it is a document people read, and it now sits
      on the same paper as the page that produced it. */
-  --bg:        #ffffff;
-  --surface:   #ffffff;
-  --surface-2: #f6f3ea;
-  --line:      #dedede;
-  --line-soft: #ededed;
+  --bg:        #f2efe8;   /* warm paper, not glare-white */
+  --surface:   #faf8f3;   /* cards sit a shade lighter than the page */
+  --surface-2: #eae6dc;   /* insets and hover, a shade darker */
+  --line:      #d9d4c8;
+  --line-soft: #e6e1d6;
 
   --text:  #0d0d0d;
   --muted: #606060;
@@ -333,7 +333,10 @@ button { cursor: pointer; background: none; border: none; }
   cursor: pointer;
   transition: background .13s;
 }
-.finding-item:hover { background: #20232a; }
+/* A hover has to be visible without becoming a second colour scheme. This is
+   one step down the same warm ramp — enough to track which row the pointer is
+   on, not enough to fight the text sitting on it. */
+.finding-item:hover { background: var(--surface-2); border-color: var(--line); }
 .finding-item:last-child { margin-bottom: 0; }
 .finding-item-title { font-size: .88rem; color: var(--text); line-height: 1.45; }
 .finding-item-meta {
@@ -656,29 +659,67 @@ button { cursor: pointer; background: none; border: none; }
    mid-sentence. Naming the target in display serif, with the globe beside it,
    gives it a first page. */
 .report-head {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 430px);
   align-items: center;
-  gap: var(--s6, 32px);
+  gap: 48px;
   width: min(100% - 48px, 1232px);
   margin: 0 auto;
-  padding: 56px 0 40px;
+  padding: 64px 0 52px;
 }
+/* A faint perspective grid behind the masthead. It gives the globe a ground
+   to sit on, so the panel reads as space rather than as a sphere floating on
+   a flat field. */
+.report-head::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 190px;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(to right,
+      rgba(13,13,13,.05) 0 1px, transparent 1px 76px),
+    repeating-linear-gradient(to bottom,
+      rgba(13,13,13,.05) 0 1px, transparent 1px 34px);
+  -webkit-mask-image: linear-gradient(to top, #000, transparent);
+  mask-image: linear-gradient(to top, #000, transparent);
+}
+.report-head > * { position: relative; }
 .report-eyebrow {
   font-size: .75rem; letter-spacing: .14em; text-transform: uppercase;
   color: var(--muted); margin: 0 0 14px;
 }
 .report-title {
   font-family: var(--serif); font-weight: 400;
-  font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 1.05;
+  font-size: clamp(2.75rem, 6.5vw, 4.625rem); line-height: 1.02;
   letter-spacing: -0.02em; margin: 0;
   overflow-wrap: anywhere;           /* long hostnames must not overflow */
 }
 .report-sub {
-  margin: 18px 0 0; max-width: min(56ch, 100%);
-  color: var(--muted); font-size: .9375rem;
+  margin: 20px 0 0; max-width: min(62ch, 100%);
+  color: var(--muted); font-size: 1rem; line-height: 1.65;
 }
-.report-head-visual { aspect-ratio: 1; min-height: 220px; }
+
+/* Three facts about how the report was produced. Deliberately not a repeat of
+   the meta bar below, which carries the machine detail — these say how much
+   weight to put on what follows. */
+.report-facts {
+  /* Equal columns so the three read as a set rather than as three phrases of
+     whatever width their text happened to be. */
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px;
+  margin: 34px 0 0; padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.report-facts dt {
+  font-size: .6875rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--faint);
+}
+.report-facts dd {
+  margin: 7px 0 0; font-family: var(--serif); font-size: 1.15rem;
+  color: var(--text); line-height: 1.25; max-width: 22ch;
+}
+.report-head-visual { aspect-ratio: 1; min-height: 330px; }
 #reportGlobe { width: 100%; height: 100%; }
 
 /* The globe is the first thing to go: on a report, the findings are the
