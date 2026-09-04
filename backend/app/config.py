@@ -241,6 +241,22 @@ class Settings:
 
         # Tool timeouts / bounded workload
         self.SCAN_TIMEOUT_NMAP = _env_int("SCAN_TIMEOUT_NMAP", 300, minimum=1)
+
+        # Deep port scanning: every one of the 65535 TCP ports, full version
+        # probing, and the NSE vuln script category.
+        #
+        # Off by default, and deliberately so. The default profiles promise
+        # bounded, non-intrusive traffic; this is neither. It is loud, it takes
+        # minutes rather than seconds, and NSE vuln scripts actively probe for
+        # weaknesses rather than merely observing. Turn it on only where you
+        # would be comfortable running nmap by hand against the same target.
+        self.NMAP_DEEP_SCAN = _env_bool("NMAP_DEEP_SCAN", False)
+        self.SCAN_TIMEOUT_NMAP_DEEP = _env_int("SCAN_TIMEOUT_NMAP_DEEP", 900, minimum=60)
+
+        # nmap's --version-intensity, 0-9. Higher sends more probes per open
+        # port and identifies more services; 7 is thorough without the long
+        # tail of rare probes that 9 adds.
+        self.NMAP_VERSION_INTENSITY = min(9, _env_int("NMAP_VERSION_INTENSITY", 7, minimum=0))
         self.SCAN_TIMEOUT_NUCLEI = _env_int("SCAN_TIMEOUT_NUCLEI", 600, minimum=1)
         self.SCAN_TIMEOUT_DEFAULT = _env_int("SCAN_TIMEOUT_DEFAULT", 120, minimum=1)
         self.JS_ANALYSIS_MAX_FILES = _env_int("JS_ANALYSIS_MAX_FILES", 20, minimum=1)

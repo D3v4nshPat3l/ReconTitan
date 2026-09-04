@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -54,18 +55,138 @@ def _hackertarget_portscan(target: str) -> str:
         return ""
 
 
+def _has_raw_socket_privilege() -> bool:
+    """Can this process send raw packets?
+
+    -sS and -O need it. Without it nmap silently falls back to a connect scan
+    and skips OS detection, so the difference is detected here and reported
+    rather than left to look like a scan that simply found nothing.
+    """
+    if os.name == "nt":
+        try:
+            import ctypes
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            return False
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
 def _nmap_subprocess(address: str) -> str:
+    """Run nmap, deeply if the operator has opted in.
+
+    The deep form scans all 65535 TCP ports with the most thorough version
+    probing nmap offers, plus the safe, version, discovery, default and vuln
+    NSE categories.
+
+    Two families of flag are deliberately absent, and this is the place to say
+    why rather than leave a future reader to wonder:
+
+    * Decoys (-D), fragmentation (-f), --data-length, --ttl and --source-port
+      exist to defeat attribution and evade intrusion detection. They find
+      nothing extra. Decoys in particular forge the source address, so the
+      target's logs implicate machines that had no part in the scan.
+    * The `exploit` NSE category attempts exploitation rather than detection.
+      Every finding this tool emits is candidate-graded and non-destructive;
+      running exploit scripts would make that claim untrue.
+
+    An operator who needs either can run nmap directly. It should not be
+    something a web service does on their behalf.
+    """
     if not shutil.which("nmap"):
         return ""
+
+    if settings.NMAP_DEEP_SCAN:
+        privileged = _has_raw_socket_privilege()
+        argv = ["nmap"]
+        if privileged:
+            # SYN scan and OS fingerprinting, both of which need raw sockets.
+            argv += ["-sS", "-O"]
+        else:
+            argv += ["-sT"]
+        argv += [
+            "-sV",
+            "--version-intensity", str(settings.NMAP_VERSION_INTENSITY),
+            "-Pn", "-n",
+            "-p-",
+            "-T4",
+            "--script", "safe,version,discovery,default,vuln",
+            "--script-args", "vulns.showall",
+            "--open",
+            "--", address,
+        ]
+        timeout = settings.SCAN_TIMEOUT_NMAP_DEEP
+        logger.info(
+            "[portscan] deep scan of %s — all 65535 ports, NSE safe/version/"
+            "discovery/default/vuln, %s",
+            address,
+            "SYN + OS detection (privileged)" if privileged
+            else "TCP connect, no OS detection (unprivileged)",
+        )
+    else:
+        argv = ["nmap", "-sV", "--open", "-T3", "--top-ports", "1000", "--", address]
+        timeout = settings.SCAN_TIMEOUT_NMAP
+
     try:
         result = subprocess.run(
-            ["nmap", "-sV", "--open", "-T3", "--top-ports", "1000", "--", address],
-            capture_output=True, text=True, timeout=settings.SCAN_TIMEOUT_NMAP, check=False,
+            argv, capture_output=True, text=True, timeout=timeout, check=False,
         )
         return result.stdout
+    except subprocess.TimeoutExpired:
+        # A deep scan that ran out of time still found whatever it found before
+        # the clock stopped; discarding that would be worse than reporting it.
+        logger.warning("[portscan] nmap timed out after %ss", timeout)
+        return ""
     except (OSError, subprocess.SubprocessError) as exc:
         logger.warning("[portscan] nmap failed: %s", exc)
         return ""
+
+
+def _parse_nse_findings(raw_output: str) -> list[dict]:
+    """Pull NSE script results out of nmap output.
+
+    Without this the deep scan would run every vuln script and then throw the
+    answers away, keeping only the port list — which is the one thing the
+    shallow scan already gives you.
+    """
+    findings: list[dict] = []
+    current_port = None
+    block: list[str] = []
+
+    def flush():
+        if not block:
+            return
+        text = chr(10).join(block)
+        vulnerable = "VULNERABLE:" in text
+        script = block[0].lstrip("|_ ").split(":")[0].strip()
+        findings.append({
+            "tool": "nmap-nse",
+            "category": "port_scan",
+            "severity": "medium" if vulnerable else "info",
+            "title": (
+                f"NSE: {script} flagged {current_port or 'the host'} as VULNERABLE"
+                if vulnerable else f"NSE: {script} on {current_port or 'host'}"
+            ),
+            "description": (
+                "An nmap NSE script reported a candidate weakness. NSE results are "
+                "signatures, not proof — confirm by hand before acting."
+                if vulnerable else "Output from an nmap NSE script."
+            ),
+            "evidence": text[:2000],
+            "requires_manual_validation": True,
+        })
+
+    for line in raw_output.splitlines():
+        port_match = re.match(r"^(\d+/tcp)\s+open", line)
+        if port_match:
+            flush(); block = []
+            current_port = port_match.group(1)
+            continue
+        if line.startswith("|"):
+            block.append(line)
+        elif block:
+            flush(); block = []
+    flush()
+    return findings
 
 
 def _rustscan_subprocess(address: str) -> str:
@@ -151,7 +272,40 @@ def run_port_scan(target: str) -> list[dict]:
             "evidence": f"Target: {domain}\nPinned address: {address}\n\n{raw[:1000]}",
         }]
 
-    findings = [{
+    findings = []
+    if method == "nmap" and settings.NMAP_DEEP_SCAN:
+        findings.extend(_parse_nse_findings(raw))
+        if not _has_raw_socket_privilege():
+            # Say it plainly. Otherwise the report shows a deep scan with no OS
+            # line and the reader concludes the host hid it, when in fact the
+            # probe was never sent.
+            findings.append({
+                "tool": "nmap", "category": "port_scan", "severity": "info",
+                "title": "Deep Scan Ran Without Raw-Socket Privilege",
+                "description": (
+                    "SYN scanning (-sS) and OS detection (-O) need raw sockets, which "
+                    "this process does not have. A TCP connect scan was used instead: "
+                    "ports and service versions are accurate, but no OS fingerprint "
+                    "was attempted and the scan is more visible in the target's logs."
+                ),
+                "evidence": (
+                    f"Target: {domain}" + chr(10)
+                    + f"Pinned address: {address}" + chr(10)
+                    + "Scan type used: -sT"
+                ),
+                "remediation": (
+                    "On Linux, grant the capability to the nmap binary rather than "
+                    "running the service as root:" + chr(10) + chr(10) +
+                    "    sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "
+                    "$(which nmap)" + chr(10) + chr(10) +
+                    "That gives nmap the one privilege it needs and leaves the scanner "
+                    "unprivileged. Running a network-facing service as root so it can "
+                    "shell out to nmap trades a much larger problem for a smaller one. "
+                    "On Windows, run the scanner from an Administrator terminal."
+                ),
+            })
+
+    findings += [{
         "tool": method, "category": "port_scan", "severity": "info",
         "title": f"Port Scan — {len(open_ports)} Open Port(s) Found",
         "description": f"The scanner checked the validated address for {domain}.",
