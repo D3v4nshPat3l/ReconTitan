@@ -37,6 +37,8 @@ jobs:
         run: |
           node --check frontend/dashboard.js
           node --check frontend/report.js
+          node --check frontend/findings-explorer.js
+          node --test frontend/tests/findings-explorer.test.cjs
           bash -n deploy.sh
       - name: Deployment preflight
         # Gates on configuration that fails silently rather than loudly: a
