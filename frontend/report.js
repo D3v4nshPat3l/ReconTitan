@@ -1465,6 +1465,7 @@ function phaseLabel(value) {
 
 function showReport(data) {
   const normalized = normalizeReportData(data);
+  ReconTitanAlerts.notify(normalized);
   setProgress(100, 'Complete!');
   $('loadingState').style.display = 'none';
   renderReport(normalized);

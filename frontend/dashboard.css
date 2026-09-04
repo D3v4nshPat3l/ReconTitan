@@ -220,6 +220,10 @@ button { cursor: pointer; background: none; border: none; }
 .btn-primary.danger-armed { background: var(--high); color: #1a0f06; font-weight: 600; }
 .btn-primary.danger-armed:hover:not(:disabled) { background: #ffa063; }
 
+.desktop-alert-toggle { display: flex; gap: .55rem; align-items: center; margin-top: .75rem; color: var(--muted); font-size: .78rem; cursor: pointer; }
+.desktop-alert-toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
+.desktop-alert-note { min-height: 1.15rem; margin: .25rem 0 0 1.75rem; color: var(--faint); font-size: .73rem; }
+
 /* ── Profiles ────────────────────────────────────────────────────────── */
 
 .profiles { border: none; margin-top: 1.9rem; }

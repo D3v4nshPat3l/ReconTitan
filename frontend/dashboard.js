@@ -132,6 +132,23 @@ document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
 const scanBtn = document.getElementById('scanBtn');
 const targetInput = document.getElementById('targetInput');
 const cancelScanBtn = document.getElementById('cancelScanBtn');
+const desktopAlertsEnabled = document.getElementById('desktopAlertsEnabled');
+const desktopAlertNote = document.getElementById('desktopAlertNote');
+
+if (desktopAlertsEnabled) {
+  desktopAlertsEnabled.checked = ReconTitanAlerts.enabled();
+  desktopAlertsEnabled.disabled = !ReconTitanAlerts.supported();
+  if (!ReconTitanAlerts.supported() && desktopAlertNote) {
+    desktopAlertNote.textContent = 'Desktop notifications are not supported by this browser.';
+  }
+  desktopAlertsEnabled.addEventListener('change', async () => {
+    const result = await ReconTitanAlerts.setEnabled(desktopAlertsEnabled.checked);
+    desktopAlertsEnabled.checked = result.enabled;
+    if (desktopAlertNote) desktopAlertNote.textContent = result.enabled
+      ? 'Desktop alerts are enabled for high and critical findings.'
+      : (result.reason || 'Desktop alerts are disabled.');
+  });
+}
 
 // Applied after scanBtn exists because the gate toggles the scan button.
 selectProfile(selectedProfile);
@@ -319,6 +336,7 @@ async function queueOrRunScan(target, profile) {
 
 function openCompletedReport(data, fallbackTarget, fallbackProfile) {
   const normalized = normalizeReportData(data);
+  ReconTitanAlerts.notify(normalized);
   const target = normalized.target || fallbackTarget;
   const profile = normalized.scan_type || fallbackProfile;
   setProgress(100, 'Assessment complete');
