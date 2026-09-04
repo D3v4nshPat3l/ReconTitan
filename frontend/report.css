@@ -12,6 +12,21 @@
    everything is coloured, nothing reads as urgent.
    ═══════════════════════════════════════════════════════════════════════ */
 
+.findings-explorer { margin: 1.5rem; padding: 1.25rem; background: var(--surface); border: 1px solid var(--line); }
+.findings-explorer[hidden] { display: none; }
+.findings-explorer p { margin: .75rem 0; color: var(--muted); }
+.explorer-controls { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; }
+.explorer-controls label { display: grid; gap: .3rem; flex: 1 1 180px; }
+.findings-explorer input, .findings-explorer select, .findings-explorer button {
+  padding: .65rem; background: var(--surface); color: var(--text); border: 1px solid var(--line); font: inherit;
+}
+.findings-explorer input, .findings-explorer select { width: 100%; min-width: 0; }
+.findings-explorer button { cursor: pointer; text-align: left; }
+.findings-explorer button:disabled { opacity: .5; cursor: default; }
+.findings-explorer :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.findings-explorer ul { list-style: none; padding: 0; margin: .75rem 0; }
+.findings-explorer li button { width: 100%; overflow-wrap: anywhere; margin-bottom: .35rem; }
+
 :root {
   /* Same surfaces as the rest of the site — see docs/DESIGN.md. The report
      used to be a dark console; it is a document people read, and it now sits

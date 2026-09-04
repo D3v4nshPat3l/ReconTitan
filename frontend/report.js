@@ -23,6 +23,7 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const safeUrl = value => { try { const u = new URL(String(value||''), window.location.origin); return ['http:','https:'].includes(u.protocol) ? u.href : '#'; } catch (_) { return '#'; } };
 let findingRegistry = [];
+const findingsExplorer = createFindingsExplorer($('findingsExplorer'), finding => window.openModal(finding));
 const findingRef = finding => { const index = findingRegistry.push(finding) - 1; return `data-finding-index="${index}"`; };
 
 // ── UTILS ──────────────────────────────────────────────────
@@ -893,6 +894,7 @@ function renderReport(data) {
   // Held for per-card refresh, which re-renders one section against
   // updated findings instead of re-running the whole scan.
   currentFindings = findings;
+  findingsExplorer.update(findings);
   currentTarget = data.target || '';
   findingRegistry = [];
   const sc = data.severity_counts || {};
@@ -1137,6 +1139,7 @@ async function refreshCard(cardId, tool, button) {
     // disappears rather than lingering.
     const tools = new Set((data.findings || []).map(x => x.tool).concat([tool]));
     currentFindings = currentFindings.filter(x => !tools.has(x.tool)).concat(data.findings || []);
+    findingsExplorer.update(currentFindings);
 
     const html = renderer(currentFindings);
     if (!html) {

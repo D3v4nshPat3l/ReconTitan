@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=27">
+<link rel="stylesheet" href="report.css?v=28">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
@@ -105,6 +105,19 @@
 <div id="aiBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
 
 <!-- MAIN REPORT GRID -->
+<section class="findings-explorer" id="findingsExplorer" aria-labelledby="explorerTitle" hidden>
+  <h2 id="explorerTitle">Findings Explorer</h2>
+  <p>Search recorded evidence. Filters affect this list only; cards and exports retain the full report.</p>
+  <div class="explorer-controls">
+    <label>Search findings<input data-query type="search" placeholder="Title, evidence, CVE or asset"></label>
+    <label>Severity<select data-severity><option value="">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option></select></label>
+    <label>Scanner<select data-tool><option value="">All scanners</option></select></label>
+    <button data-clear type="button">Clear filters</button>
+  </div>
+  <p data-count role="status" aria-live="polite"></p>
+  <ul data-results></ul>
+  <div class="explorer-controls"><button data-previous type="button">Previous</button><button data-next type="button">Next</button></div>
+</section>
 <main class="report-grid" id="reportGrid" style="display:none">
   <!-- Cards injected by JS -->
 </main>
@@ -191,7 +204,8 @@
   </div>
 </div>
 
-<script src="report.js?v=26"></script>
+<script src="findings-explorer.js?v=1"></script>
+<script src="report.js?v=27"></script>
 <script src="globe.js?v=3" defer></script>
 </body>
 </html>
