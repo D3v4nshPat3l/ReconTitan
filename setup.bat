@@ -213,11 +213,44 @@ echo.
 echo        Reminder: only scan domains you own or have written permission
 echo        to test. Danger Mode sends real attack traffic.
 echo.
+echo        You will see "MongoDB unavailable; running in degraded mode" in
+echo        the log. That is expected and harmless: scanning works fully
+echo        without a database. You lose saved history and the SOC console,
+echo        nothing else.
+echo.
 echo  ============================================================================
 echo.
 
+REM Uvicorn's own failure here is a raw winsock error that says nothing about
+REM what to do, so the port is checked first and explained in plain terms.
+set "PORT=8000"
+"%VPY%" -c "import socket,sys; s=socket.socket(); r=s.connect_ex(('127.0.0.1',8000)); s.close(); sys.exit(0 if r else 1)" >nul 2>&1
+if errorlevel 1 (
+  echo        Port 8000 is already in use.
+  echo.
+  echo        Something is already listening there - most likely a copy of
+  echo        ReconTitan you started earlier and left running. Check any other
+  echo        terminal windows, or find it with:
+  echo.
+  echo            netstat -ano ^| findstr :8000
+  echo.
+  set /p "ALT=       Start on port 8080 instead? [y/N] "
+  if /i "!ALT!"=="y" (
+    set "PORT=8080"
+    echo.
+    echo        Using http://127.0.0.1:8080 instead.
+    echo.
+  ) else (
+    echo.
+    echo        Stop the other copy, then run setup.bat again.
+    echo.
+    pause
+    exit /b 1
+  )
+)
+
 cd /d "%ROOT%backend"
-"%VPY%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+"%VPY%" -m uvicorn app.main:app --host 127.0.0.1 --port !PORT!
 
 echo.
 echo   ReconTitan has stopped.

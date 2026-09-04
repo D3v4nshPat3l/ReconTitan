@@ -221,12 +221,38 @@ cat <<RUN
        ${WARN}Reminder: only scan domains you own or have written permission
        to test. Danger Mode sends real attack traffic.${N}
 
+       You will see "MongoDB unavailable; running in degraded mode" in the
+       log. That is expected and harmless: scanning works fully without a
+       database. You lose saved history and the SOC console, nothing else.
+
  ============================================================================
 
 RUN
 
+# Uvicorn's own failure here is a raw errno that says nothing about what to do,
+# so the port is checked first and explained in plain terms.
+PORT=8000
+if "$VPY" -c 'import socket,sys; s=socket.socket(); r=s.connect_ex(("127.0.0.1",8000)); s.close(); sys.exit(0 if r else 1)' 2>/dev/null; then
+  :
+else
+  warn "Port 8000 is already in use."
+  say ""
+  info "Something is already listening there - most likely a copy of"
+  info "ReconTitan you started earlier and left running. Find it with:"
+  say ""
+  info "    lsof -i :8000        (macOS)"
+  info "    ss -lptn 'sport = :8000'   (Linux)"
+  say ""
+  printf '       Start on port 8080 instead? [y/N] '
+  read -r ALT
+  case "$ALT" in
+    y|Y) PORT=8080; say ""; good "Using http://127.0.0.1:8080 instead."; say "" ;;
+    *)   say ""; info "Stop the other copy, then run ./setup.sh again."; say ""; exit 1 ;;
+  esac
+fi
+
 cd "$ROOT/backend"
-"$VPY" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+"$VPY" -m uvicorn app.main:app --host 127.0.0.1 --port "$PORT"
 
 say ""
 say "  ReconTitan has stopped."
