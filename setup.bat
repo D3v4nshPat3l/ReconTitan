@@ -48,7 +48,9 @@ echo        Your system Python is not touched.
 echo.
 echo     4. Create a .env configuration file if you do not have one.
 echo.
-echo     5. Start the scanner at http://127.0.0.1:8000
+echo     5. Offer to install nmap, so port scanning stays on this machine.
+echo.
+echo     6. Start the scanner at http://127.0.0.1:8000
 echo.
 echo   WHAT IT WILL NOT DO
 echo.
@@ -77,7 +79,7 @@ echo # Created: %DATE% %TIME%>> "%MANIFEST%"
 
 REM ---------------------------------------------------------------------------
 echo.
-echo  [1/5] Checking for Python
+echo  [1/6] Checking for Python
 echo  ---------------------------------------------------------------------------
 
 set "PY_CMD="
@@ -135,7 +137,7 @@ if defined PY_CMD (
 
 REM ---------------------------------------------------------------------------
 echo.
-echo  [2/5] Creating the private Python environment
+echo  [2/6] Creating the private Python environment
 echo  ---------------------------------------------------------------------------
 
 if exist "%VENV%\Scripts\python.exe" (
@@ -161,7 +163,7 @@ set "VPY=%VENV%\Scripts\python.exe"
 
 REM ---------------------------------------------------------------------------
 echo.
-echo  [3/5] Installing Python packages into .venv
+echo  [3/6] Installing Python packages into .venv
 echo  ---------------------------------------------------------------------------
 echo        These go inside .venv only. Your system Python is untouched.
 echo        Reading the list from: backend\requirements.txt
@@ -185,7 +187,43 @@ echo        Packages installed.
 
 REM ---------------------------------------------------------------------------
 echo.
-echo  [4/5] Configuration
+echo  [4/6] Port scanner ^(nmap^)
+echo  ---------------------------------------------------------------------------
+
+where nmap >nul 2>&1
+if errorlevel 1 (
+  echo        nmap is not installed.
+  echo.
+  echo        Without it, port scanning falls back to a third-party API that
+  echo        has to be told your target's address. With it, scanning stays
+  echo        on this machine.
+  echo.
+  echo        The exact command that will run is:
+  echo          winget install --id Insecure.Nmap -e --source winget
+  echo.
+  echo        This is a system-wide install and Windows will ask permission.
+  echo        Declining is fine - everything else still works.
+  echo.
+  set /p "DONMAP=       Install nmap? [y/N] "
+  if /i "!DONMAP!"=="y" (
+    where winget >nul 2>&1
+    if errorlevel 1 (
+      echo        winget is unavailable. Install nmap from https://nmap.org/download.html
+    ) else (
+      winget install --id Insecure.Nmap -e --source winget
+      echo INSTALLED_NMAP=1>> "%MANIFEST%"
+      echo        Installed. It may need a new terminal before it is on PATH.
+    )
+  ) else (
+    echo        Skipped. Port scanning will use the fallback.
+  )
+) else (
+  for /f "delims=" %%V in ('nmap --version 2^>^&1 ^| findstr /R "^Nmap"') do echo        Found: %%V
+)
+
+REM ---------------------------------------------------------------------------
+echo.
+echo  [5/6] Configuration
 echo  ---------------------------------------------------------------------------
 
 if exist "%ROOT%.env" (
@@ -200,7 +238,7 @@ if exist "%ROOT%.env" (
 
 REM ---------------------------------------------------------------------------
 echo.
-echo  [5/5] Starting ReconTitan
+echo  [6/6] Starting ReconTitan
 echo  ---------------------------------------------------------------------------
 echo.
 echo        The scanner will start at:
