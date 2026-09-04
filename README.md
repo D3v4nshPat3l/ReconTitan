@@ -50,7 +50,9 @@ If it won't run: `chmod +x setup.sh`
 </tr>
 </table>
 
-The script prints its full plan before touching anything, then walks through five steps out loud: find Python, create a private environment inside this folder, install the packages into that folder, write a config file, start the scanner.
+The script prints its full plan before touching anything, then walks through six steps out loud: find Python, create a private environment inside this folder, install the packages into it, offer to install **nmap**, write a config file, start the scanner.
+
+`setup.sh` is for macOS and Linux only. Run it under Git Bash on Windows and it stops and points you at `setup.bat` — Windows lays virtual environments out differently, and continuing would overwrite a working one.
 
 It touches **three things**, all inside this directory:
 
@@ -70,7 +72,9 @@ Then open **<http://127.0.0.1:8000>**.
 uninstall.bat          ·          ./uninstall.sh
 ```
 
-Goes through every item one at a time — what it is, where it lives, how much space it uses — and asks. **The default for every question is keep.** Nothing is deleted unless you type `y` for that specific item.
+Goes through five items one at a time — the environment, your config, bytecode caches, Python, and nmap — showing what each is, where it lives and how much space it uses. **The default for every question is keep.** Nothing is deleted unless you type `y` for that specific item.
+
+Python and nmap are only offered if *setup* installed them, and on Linux the uninstaller refuses to remove Python at all: the package manager and desktop depend on it.
 
 ---
 
@@ -256,8 +260,31 @@ Everything is environment variables; [`.env.example`](.env.example) is the annot
 | `API_ACCESS_KEY` | *(empty)* | Set it and every `/api/` route needs `X-ReconTitan-Key` |
 | `ALLOW_DANGER_MODE` | `true` | Master switch for active testing |
 | `AI_PROVIDER` | `auto` | `auto`, `ollama`, `openai`, or `none` |
+| `NMAP_DEEP_SCAN` | `false` | All 65535 ports + NSE vuln scripts. See below |
 
 > `DOMAIN` and `CORS_ORIGINS` look inconsistent on purpose. `DOMAIN` is a hostname for Host-header matching; `CORS_ORIGINS` is a browser origin and must carry `https://`.
+
+### Deep port scanning
+
+The setup script offers to install **nmap**. Without it, port scanning falls back to a third-party API that has to be told your target's address; with it, scanning stays on your machine.
+
+```ini
+NMAP_DEEP_SCAN=true
+```
+
+turns the default probe into every one of the 65,535 TCP ports, maximum version intensity, and the `safe,version,discovery,default,vuln` NSE categories with `vulns.showall`. NSE output is parsed into findings — a `VULNERABLE:` result becomes a medium-severity finding attributed to its port.
+
+**It is off by default on purpose.** The standard profiles promise bounded, non-intrusive traffic; NSE vuln scripts actively probe rather than observe, and a scan that took 10 seconds now takes minutes. Turn it on where you would be comfortable running nmap by hand against the same target.
+
+**On privilege.** `-sS` and `-O` need raw sockets. ReconTitan never invokes `sudo` itself — a network-facing service that shells out as root is a worse problem than the one it solves. Without the privilege it uses `-sT`, says so in the report, and gives you the fix:
+
+```bash
+sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip $(which nmap)
+```
+
+That grants nmap the one capability it needs and leaves the scanner unprivileged.
+
+**Not included, deliberately.** Decoy scanning (`-D`), fragmentation (`-f`), `--data-length`, `--ttl`, `--source-port` and user-agent spoofing find nothing extra — they exist to defeat attribution and evade intrusion detection. Decoys forge the source address, so the target's logs implicate machines with no part in the scan. The `exploit` NSE category is excluded for the same reason: it attempts exploitation, which would contradict this tool's guarantee that every finding is candidate-graded and nothing is modified. Run nmap directly if an engagement genuinely calls for them.
 
 **AI explanations** run through a local [Ollama](https://ollama.com) model by default — findings never leave your machine unless you explicitly choose `openai`. Without any provider, summaries fall back to a deterministic template. See [`docs/OLLAMA_SETUP.md`](docs/OLLAMA_SETUP.md).
 
