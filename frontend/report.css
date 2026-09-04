@@ -13,15 +13,18 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --bg:        #0b0c0e;
-  --surface:   #131418;
-  --surface-2: #1a1c21;
-  --line:      #26282f;
-  --line-soft: #1d1f25;
+  /* Same surfaces as the rest of the site — see docs/DESIGN.md. The report
+     used to be a dark console; it is a document people read, and it now sits
+     on the same paper as the page that produced it. */
+  --bg:        #ffffff;
+  --surface:   #ffffff;
+  --surface-2: #f6f3ea;
+  --line:      #dedede;
+  --line-soft: #ededed;
 
-  --text:  #e9e9ec;
-  --muted: #9a9daa;
-  --faint: #6b6e7b;
+  --text:  #0d0d0d;
+  --muted: #606060;
+  --faint: #979797;
 
   /* Same accent as the rest of the site. See docs/DESIGN.md. */
   --accent:      #ee7501;
@@ -30,14 +33,14 @@
   --cyan:        #22d3ee;
 
   /* Severity keeps its own ramp, deliberately apart from the accent: a
-     scanner cannot spend its only strong colour on decoration. Tuned for a
-     dark ground, so lighter than the light-surface values in DESIGN.md. */
-  --critical: #ff6a5e;
-  --high:     #ff9d4d;
-  --medium:   #f5c451;
-  --low:      #6ba8f5;
-  --info:     #8b8f9e;
-  --ok:       #5ddb92;
+     scanner cannot spend its only strong colour on decoration. These are the
+     light-surface values from DESIGN.md, all at 4.5:1 or better on paper. */
+  --critical: #b42318;
+  --high:     #d92d20;
+  --medium:   #b54708;
+  --low:      #175cd3;
+  --info:     #606060;
+  --ok:       #067647;
 
   --serif: 'Instrument Serif', Georgia, serif;
   --sans:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -47,12 +50,6 @@
   --r: 0;
 }
 
-/* The trail overlay, matching the rest of the site. Fixed to the viewport and
-   pointer-events:none, so every control underneath stays clickable. */
-#cursorCanvas {
-  position: fixed; inset: 0; width: 100vw; height: 100vh;
-  pointer-events: none; z-index: 90;
-}
 
 /* Headings take the display serif, as everywhere else on the site. The report
    was set entirely in the body face, which made it read as a console dump
@@ -78,7 +75,7 @@ a { color: inherit; text-decoration: none; }
 button, input { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: none; }
 [hidden] { display: none !important; }
-::selection { background: var(--accent); color: #fff; }
+::selection { background: var(--accent); color: var(--text); }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: var(--bg); }
 *::-webkit-scrollbar-thumb { background: var(--line); border-radius: 0; border: 2px solid var(--bg); }
@@ -128,7 +125,7 @@ button { cursor: pointer; background: none; border: none; }
   transition: .15s;
 }
 .tb-btn:hover { color: var(--text); border-color: var(--faint); background: var(--surface); }
-.tb-btn.primary { background: var(--accent-dim); border-color: var(--accent-dim); color: #fff; }
+.tb-btn.primary { background: var(--accent); border-color: var(--accent); color: #0d0d0d; }
 .tb-btn.primary:hover { background: var(--accent); border-color: var(--accent); }
 
 /* ── Meta bar ────────────────────────────────────────────────────────── */
@@ -653,3 +650,65 @@ button { cursor: pointer; background: none; border: none; }
   body { background: #fff; color: #000; }
   .wc-card { border-color: #ccc; background: #fff; break-inside: avoid; }
 }
+
+/* ── Report masthead ──────────────────────────────────────────────────────
+   The report used to open on a meta bar, which reads as a table starting
+   mid-sentence. Naming the target in display serif, with the globe beside it,
+   gives it a first page. */
+.report-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  align-items: center;
+  gap: var(--s6, 32px);
+  width: min(100% - 48px, 1232px);
+  margin: 0 auto;
+  padding: 56px 0 40px;
+}
+.report-eyebrow {
+  font-size: .75rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 14px;
+}
+.report-title {
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(2.25rem, 5vw, 3.5rem); line-height: 1.05;
+  letter-spacing: -0.02em; margin: 0;
+  overflow-wrap: anywhere;           /* long hostnames must not overflow */
+}
+.report-sub {
+  margin: 18px 0 0; max-width: min(56ch, 100%);
+  color: var(--muted); font-size: .9375rem;
+}
+.report-head-visual { aspect-ratio: 1; min-height: 220px; }
+#reportGlobe { width: 100%; height: 100%; }
+
+/* The globe is the first thing to go: on a report, the findings are the
+   content and the visual is the flourish. */
+@media (max-width: 900px) {
+  .report-head { grid-template-columns: 1fr; padding: 40px 0 28px; }
+  .report-head-visual { display: none; }
+}
+
+/* ── Topbar on a dark ground ──────────────────────────────────────────────
+   The bar stays black to match the site header, so its contents cannot take
+   the page's ink tokens — those are now near-black and would vanish. These
+   override the light values for the bar only. */
+.topbar { background: #000; border-bottom-color: rgba(255,255,255,.14); }
+.topbar-logo { color: #fff; }
+.topbar-target {
+  color: #fff;
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.18);
+}
+.tb-btn {
+  color: rgba(255,255,255,.75);
+  border-color: rgba(255,255,255,.28);
+  background: transparent;
+}
+.tb-btn:hover {
+  color: #fff;
+  border-color: #fff;
+  background: rgba(255,255,255,.08);
+}
+/* The primary action keeps accent-on-ink, which reads on either ground. */
+.tb-btn.primary,
+.tb-btn.primary:hover { color: #0d0d0d; }

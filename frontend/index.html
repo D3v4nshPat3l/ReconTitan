@@ -14,11 +14,10 @@
 </head>
 <body>
 
-<canvas id="cursorCanvas" aria-hidden="true"></canvas>
 
-<div class="announce" data-surface="light">Authorized testing only — scan what you own or hold written permission to assess</div>
+<div class="announce">Authorized testing only — scan what you own or hold written permission to assess</div>
 
-<header class="topbar" data-surface="dark">
+<header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="/" aria-label="ReconTitan home">
       <span class="brand-mark" aria-hidden="true"></span>
@@ -37,7 +36,7 @@
 <main>
 
 <!-- ═════════════════════ Hero ═════════════════════ -->
-<section class="hero" data-surface="dark" aria-label="Introduction">
+<section class="hero" aria-label="Introduction">
   <canvas id="heroCanvas" aria-hidden="true"></canvas>
   <div class="shell hero-shell">
     <div class="hero-copy">
@@ -55,7 +54,7 @@
     </div>
 
     <div class="hero-visual" aria-hidden="true">
-      <canvas id="globeCanvas"></canvas>
+      <canvas id="globeCanvas" data-globe="dark"></canvas>
     </div>
 
     <dl class="hero-stats">
@@ -67,7 +66,7 @@
 </section>
 
 <!-- ═════════════════════ Scanner ═════════════════════ -->
-<section class="scanner" id="scanner" data-surface="light">
+<section class="scanner" id="scanner">
   <div class="shell">
     <div class="scan-grid">
 
@@ -129,7 +128,7 @@
 
         <!-- Deliberately heavy. It is the last thing between a click and real
              attack traffic reaching someone's server. -->
-        <section class="gate" id="dangerGate" data-surface="dark" hidden aria-labelledby="gateTitle">
+        <section class="gate" id="dangerGate" hidden aria-labelledby="gateTitle">
           <h2 class="gate-title" id="gateTitle">This sends real attack traffic</h2>
           <p class="gate-lead" id="dangerGateStatus">
             Danger mode probes for injection, fuzzes directories and traversal paths,
@@ -169,7 +168,7 @@
 </section>
 
 <!-- ═════════════════════ Capabilities ═════════════════════ -->
-<section class="checks" id="capabilities" data-surface="light">
+<section class="checks" id="capabilities">
   <div class="shell">
     <header class="section-head">
       <p class="eyebrow">Coverage</p>
@@ -212,7 +211,7 @@
 </section>
 
 <!-- ═════════════════════ Feed ═════════════════════ -->
-<section class="feed" id="news-section" data-surface="light">
+<section class="feed" id="news-section">
   <div class="shell">
     <header class="section-head section-head-row">
       <div>
@@ -234,7 +233,7 @@
 
 </main>
 
-<footer class="footer" data-surface="dark">
+<footer class="footer">
   <div class="shell footer-inner">
     <span>ReconTitan — authorized testing only.</span>
     <span class="footer-links">
@@ -245,8 +244,7 @@
   </div>
 </footer>
 
-<script src="globe.js?v=2" defer></script>
-<script src="cursor.js?v=2" defer></script>
+<script src="globe.js?v=3" defer></script>
 <script src="dashboard.js?v=18"></script>
 </body>
 </html>

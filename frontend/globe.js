@@ -7,17 +7,19 @@
  * small, dependency-free, and fast enough to sit behind a hero without
  * costing anything noticeable.
  */
-(function () {
+function mountGlobe(canvas) {
   'use strict';
 
-  const canvas = document.getElementById('globeCanvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  const INK_LINE = '255,255,255';
+  // The wireframe has to read against whatever it sits on. Dark ground gets
+  // white lines; paper gets ink. Declared per canvas rather than assumed.
+  const onPaper  = canvas.dataset.globe === 'light';
+  const INK_LINE = onPaper ? '13,13,13' : '255,255,255';
   const ACCENT   = '238,117,1';
 
   // ── Geometry ────────────────────────────────────────────────────────────
@@ -150,7 +152,8 @@
         const p1 = project(tilt(rotateY(ring[i], spin + yawNow)));
         const p2 = project(tilt(rotateY(ring[i + 1], spin + yawNow)));
         const d = (p1.depth + p2.depth) / 2;
-        const alpha = 0.07 + 0.23 * ((d + 1) / 2);   // far side stays visible, faintly
+        const base = onPaper ? 0.10 : 0.07, span = onPaper ? 0.30 : 0.23;
+        const alpha = base + span * ((d + 1) / 2);   // far side stays visible, faintly
         ctx.strokeStyle = 'rgba(' + INK_LINE + ',' + alpha.toFixed(3) + ')';
         ctx.beginPath();
         ctx.moveTo(p1.x, p1.y);
@@ -283,4 +286,7 @@
   reduceMotion.addEventListener('change', (e) => {
     if (e.matches) { stop(); draw(0); } else { start(); }
   });
-})();
+}
+
+// Every canvas that asks for one gets its own instance.
+document.querySelectorAll('[data-globe]').forEach(mountGlobe);

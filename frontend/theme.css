@@ -133,15 +133,6 @@ section { padding-block: var(--s9); }
   position: absolute; inset: 0; width: 100%; height: 100%;
   opacity: .5; pointer-events: none;
 }
-/* Page-level overlay, fixed to the viewport so the trail follows the cursor
-   over every band rather than only the hero. Above the content so glyphs are
-   never clipped by a section, but pointer-events:none keeps every control
-   underneath fully clickable — and keeps elementFromPoint returning the real
-   content, which is how each glyph picks its colour. */
-#cursorCanvas {
-  position: fixed; inset: 0; width: 100vw; height: 100vh;
-  pointer-events: none; z-index: 90;
-}
 .hero .shell { position: relative; z-index: 1; }
 .hero-shell {
   display: grid; align-items: center;

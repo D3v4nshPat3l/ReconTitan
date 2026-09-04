@@ -9,14 +9,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=21">
+<link rel="stylesheet" href="report.css?v=23">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
-<body data-surface="dark">
+<body>
 
-<canvas id="cursorCanvas" aria-hidden="true"></canvas>
 <!-- TOP BAR -->
-<header class="topbar" data-surface="dark">
+<header class="topbar">
   <a class="topbar-logo" href="/">Recon<strong>Titan</strong></a>
   <div class="topbar-target" id="topbarTarget">—</div>
   <div class="topbar-actions">
@@ -26,6 +25,18 @@
     <a class="tb-btn" href="/">New scan</a>
   </div>
 </header>
+
+<!-- REPORT MASTHEAD -->
+<section class="report-head">
+  <div class="report-head-copy">
+    <p class="report-eyebrow">External attack surface report</p>
+    <h1 class="report-title" id="reportTitle">—</h1>
+    <p class="report-sub">Every finding below carries the evidence it was derived from. Anything inferred rather than proven is labelled a candidate.</p>
+  </div>
+  <div class="report-head-visual" aria-hidden="true">
+    <canvas id="reportGlobe" data-globe="light"></canvas>
+  </div>
+</section>
 
 <!-- SCAN META BAR -->
 <div class="metabar" id="metabar">
@@ -132,7 +143,7 @@
   </div>
 </div>
 
-<script src="report.js?v=20"></script>
-<script src="cursor.js?v=2" defer></script>
+<script src="report.js?v=23"></script>
+<script src="globe.js?v=3" defer></script>
 </body>
 </html>

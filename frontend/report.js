@@ -693,6 +693,9 @@ function renderReport(data) {
   $('topbarTarget').textContent = data.target || '—';
   $('metaTarget').textContent   = data.target || '—';
   $('metaScanId').textContent   = (data.scan_id||'—').substring(0,16);
+  // The masthead names the target; the meta bar keeps the machine detail.
+  const head = document.getElementById('reportTitle');
+  if (head) head.textContent = data.target || '—';
   const scanProfile = data.scan_type || sessionStorage.getItem('rt_scan_profile') || 'full';
   const profileNames = {full:'FULL', recon_only:'RECON', osint_only:'OSINT', vuln_only:'VULN', danger:'DANGER'};
   if ($('metaProfile')) $('metaProfile').textContent = profileNames[scanProfile] || String(scanProfile).toUpperCase();
