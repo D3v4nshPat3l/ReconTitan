@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -144,6 +145,13 @@ def test_scan(
     danger_session = None
     danger_stage_names: set[str] = set()
     if scan_type is ScanType.DANGER:
+        # Depth follows the authorisation gate. The port scanner reads this and
+        # runs its deep profile, so a user who typed the danger phrase gets the
+        # thorough scan without a separate global setting, and a plain Full scan
+        # keeps the bounded traffic its description promises.
+        from app.tasks.recon.port_scan import DANGER_ACTIVE
+        DANGER_ACTIVE.set(True)
+
         from app.tasks.vulnscan.danger.pipeline import danger_stages
 
         danger_session, danger_tools = danger_stages(target)
@@ -245,6 +253,84 @@ def test_scan(
         duration_seconds=payload["total_time_seconds"],
     )
     return payload
+
+
+@router.get("/rescan")
+def rescan_one_tool(
+    http_request: Request,
+    target: str = Query(..., min_length=3, max_length=253),
+    tool: str = Query(..., min_length=2, max_length=40),
+):
+    """Re-run a single scanner and return just its findings.
+
+    This backs the refresh control on each report card, so a section that
+    failed or returned stale data can be retried on its own instead of
+    re-running the whole scan.
+
+    Two limits are deliberate. The tool must be one of the named safe-profile
+    scanners -- the danger stages are not reachable here, because they are
+    gated on a typed acknowledgement that a refresh button cannot collect.
+    And DANGER_ACTIVE is left unset, so the port scanner runs its bounded
+    profile rather than the deep one for the same reason.
+    """
+    tools = {name: fn for group in _tool_groups().values() for name, fn in group}
+
+    # Accept an alphanumeric alias for every scanner alongside its real name.
+    # "crt.sh" is the reason: the injection filter blocks a query value ending
+    # in .sh, correctly, since it cannot know this one is a certificate log
+    # rather than a shell script. Naming it "crtsh" in the URL sidesteps that
+    # without loosening the filter for everything else.
+    aliases = {re.sub(r"[^a-z0-9]", "", name.lower()): name for name in tools}
+    resolved = tool if tool in tools else aliases.get(re.sub(r"[^a-z0-9]", "", tool.lower()))
+    if resolved is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown or non-refreshable scanner: {tool}",
+        )
+    tool = resolved
+
+    ok, target, error = validate_scan_target(target, resolve_dns=True)
+    if not ok:
+        audit.record_scan_event(
+            audit.SCAN_REJECTED, http_request, target=target, detail=error,
+        )
+        raise HTTPException(status_code=400, detail=error)
+
+    start = time.monotonic()
+    try:
+        results = tools[tool](target) or []
+    except Exception as exc:
+        # Report the failure rather than 500-ing. The card needs something to
+        # display either way, and "this check failed, here is why" is a more
+        # useful answer than a browser-level error the user cannot act on.
+        logger.exception("[rescan] %s failed for %s", tool, target)
+        return {
+            "status": "error",
+            "tool": tool,
+            "target": target,
+            "error": type(exc).__name__,
+            "time_seconds": round(time.monotonic() - start, 2),
+            "findings": [],
+        }
+
+    findings = []
+    for finding in results:
+        finding = dict(finding)
+        finding.setdefault("id", f"finding_{uuid.uuid4().hex[:10]}")
+        finding.setdefault("severity", "info")
+        finding.setdefault("description", "")
+        finding.setdefault("title", tool)
+        finding.setdefault("category", "general")
+        finding.setdefault("tool", tool)
+        findings.append(finding)
+
+    return {
+        "status": "ok",
+        "tool": tool,
+        "target": target,
+        "time_seconds": round(time.monotonic() - start, 2),
+        "findings": findings,
+    }
 
 
 @router.post("/verify")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import contextvars
 import os
 import re
 import shutil
@@ -55,6 +56,17 @@ def _hackertarget_portscan(target: str) -> str:
         return ""
 
 
+# Set by the scan runner for the duration of a Danger Mode scan. Depth belongs
+# to the authorisation gate, not to a global setting: NMAP_DEEP_SCAN=true would
+# otherwise make a plain "Full" scan fire all 65535 ports with vuln scripts,
+# which is far more traffic than that profile's description promises.
+DANGER_ACTIVE = contextvars.ContextVar("recontitan_danger_scan", default=False)
+
+
+def deep_scan_requested() -> bool:
+    return bool(settings.NMAP_DEEP_SCAN or DANGER_ACTIVE.get())
+
+
 def _find_binary(name: str) -> str | None:
     """Locate a scanner binary, PATH first and then the usual install roots.
 
@@ -100,12 +112,32 @@ def _has_raw_socket_privilege() -> bool:
     return hasattr(os, "geteuid") and os.geteuid() == 0
 
 
-def _nmap_subprocess(address: str) -> str:
+def _script_args(domain: str) -> str:
+    """Build --script-args, naming the domain where a script needs it.
+
+    dns-zone-transfer takes the zone to ask for as an argument and skips
+    itself entirely without one, so passing the scanned domain is the
+    difference between the script running and silently doing nothing.
+    """
+    args = ["unsafe=1", "vulns.showall", "http.useragent=Mozilla/5.0"]
+    if domain:
+        # Commas separate arguments, so a domain containing one would split
+        # into two malformed args. Real hostnames cannot, but the value
+        # reaches here from user input and is not worth trusting on that.
+        safe = domain.replace(",", "")
+        args.append(f"dns-zone-transfer.domain={safe}")
+    return ",".join(args)
+
+
+def _nmap_subprocess(address: str, domain: str = "") -> str:
     """Run nmap, deeply if the operator has opted in.
 
-    The deep form scans all 65535 TCP ports with the most thorough version
-    probing nmap offers, plus the safe, version, discovery, default and vuln
-    NSE categories.
+    The deep form scans the NMAP_DEEP_PORTS range (1-20000 by default) with
+    the most thorough version probing nmap offers, plus the NSE scripts
+    selected by NMAP_DEEP_SCRIPTS. The range stops short of all 65535 on
+    purpose: with -sV and scripts running against every open port, an
+    all-ports sweep does not finish inside SCAN_TIMEOUT_NMAP_DEEP, and a
+    scan that times out contributes nothing to the report at all.
 
     Two families of flag are deliberately absent, and this is the place to say
     why rather than leave a future reader to wonder:
@@ -125,30 +157,43 @@ def _nmap_subprocess(address: str) -> str:
     if not nmap_bin:
         return ""
 
-    if settings.NMAP_DEEP_SCAN:
+    if deep_scan_requested():
         privileged = _has_raw_socket_privilege()
         argv = [nmap_bin]
         if privileged:
             # SYN scan and OS fingerprinting, both of which need raw sockets.
-            argv += ["-sS", "-O"]
+            # --osscan-guess makes nmap report its best guess rather than
+            # staying silent when the fingerprint is not an exact match.
+            argv += ["-sS", "-O", "--osscan-guess", "-A", "-sU"]
         else:
             argv += ["-sT"]
         argv += [
             "-sV",
             "--version-intensity", str(settings.NMAP_VERSION_INTENSITY),
             "-Pn", "-n",
-            "-p-",
-            "-T4",
-            "--script", "safe,version,discovery,default,vuln",
-            "--script-args", "vulns.showall",
+            "-p", settings.NMAP_DEEP_PORTS,
+            "-T5",
+            "--max-retries", "2",
+            "--min-rate", "10000",
+            "--script", settings.NMAP_DEEP_SCRIPTS,
+            "--script-args", _script_args(domain),
             "--open",
             "--", address,
         ]
+        if settings.NMAP_OUTPUT_DIR:
+            # -oA writes .nmap/.gnmap/.xml. Named per address so concurrent
+            # scans cannot overwrite each other's artifacts.
+            stem = os.path.join(
+                settings.NMAP_OUTPUT_DIR,
+                "recontitan_" + re.sub(r"[^A-Za-z0-9._-]", "_", address),
+            )
+            argv[-2:-2] = ["-oA", stem]
         timeout = settings.SCAN_TIMEOUT_NMAP_DEEP
         logger.info(
-            "[portscan] deep scan of %s — all 65535 ports, NSE safe/version/"
-            "discovery/default/vuln, %s",
+            "[portscan] deep scan of %s - ports %s, NSE %s, %s",
             address,
+            settings.NMAP_DEEP_PORTS,
+            settings.NMAP_DEEP_SCRIPTS,
             "SYN + OS detection (privileged)" if privileged
             else "TCP connect, no OS detection (unprivileged)",
         )
@@ -258,7 +303,7 @@ def run_port_scan(target: str) -> list[dict]:
     raw = _rustscan_subprocess(address)
     method = "rustscan" if raw else ""
     if not raw:
-        raw = _nmap_subprocess(address)
+        raw = _nmap_subprocess(address, domain)
         method = "nmap" if raw else ""
     if not raw:
         raw = _hackertarget_portscan(address)
@@ -304,7 +349,7 @@ def run_port_scan(target: str) -> list[dict]:
         }]
 
     findings = []
-    if method == "nmap" and settings.NMAP_DEEP_SCAN:
+    if method == "nmap" and deep_scan_requested():
         findings.extend(_parse_nse_findings(raw))
         if not _has_raw_socket_privilege():
             # Say it plainly. Otherwise the report shows a deep scan with no OS

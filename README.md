@@ -108,7 +108,17 @@ A real `full` scan of `example.com` — **25 modules, 34 findings, 64 seconds.**
 <img src="docs/screenshots/report-findings.png" alt="Report cards showing TLS, DNS, subdomains, WHOIS, headers and CVE candidates" width="100%">
 </div>
 
-Every card is a module. Notice what an honest scanner looks like: **Open Ports** says `Binary not installed` and names its fallback rather than reporting nothing. **Subdomains** found 9 and lists them. **HTTP Security** marks five headers `Missing` with a link to analyse each. A tool that never says *"I couldn't check this"* is a tool you cannot trust.
+Every card is a module. Notice what an honest scanner looks like: a check that could not run says so and names its fallback rather than reporting nothing. **Subdomains** found 9 and lists them. **HTTP Security** marks five headers `Missing` with a link to analyse each. A tool that never says *"I couldn't check this"* is a tool you cannot trust.
+
+#### Every card explains itself, and every card can be re-run
+
+Two controls sit in the corner of each card.
+
+**ⓘ tells you what you are looking at** — what the section shows, how the data was actually obtained, and how to read it. Not a tooltip repeating the title: it is the difference between *"Subdomains: 9"* and knowing those names came from Certificate Transparency logs, which means they were certified rather than confirmed live, and that `dev` and `staging` are the interesting ones because they are usually less hardened than production while being just as reachable.
+
+**↺ runs that one check again.** A single module, not the whole scan — useful when a check timed out, when a third-party API was rate-limited, or when you have just fixed something and want to confirm it. The card dims, names the scanner it is running, and swaps in the new result; findings the module no longer reports disappear rather than lingering. If the check fails, the card says why and keeps the data it already had.
+
+Refresh is deliberately limited to the safe-profile scanners. The Danger Mode stages are gated on a typed acknowledgement, and a button cannot collect one — so those cards carry a ⓘ and no ↺ rather than a control that would run active attack traffic on a single click.
 
 ### The scanner
 
@@ -260,7 +270,9 @@ Everything is environment variables; [`.env.example`](.env.example) is the annot
 | `API_ACCESS_KEY` | *(empty)* | Set it and every `/api/` route needs `X-ReconTitan-Key` |
 | `ALLOW_DANGER_MODE` | `true` | Master switch for active testing |
 | `AI_PROVIDER` | `auto` | `auto`, `ollama`, `openai`, or `none` |
-| `NMAP_DEEP_SCAN` | `false` | All 65535 ports + NSE vuln scripts. See below |
+| `NMAP_DEEP_SCAN` | `false` | Deep port scan + NSE scripts. See below |
+| `NMAP_DEEP_PORTS` | `1-10000` | TCP range a deep scan covers. Any nmap `-p` expression |
+| `NMAP_DEEP_SCRIPTS` | *(50 scripts)* | NSE scripts a deep scan runs. Any nmap `--script` expression |
 
 > `DOMAIN` and `CORS_ORIGINS` look inconsistent on purpose. `DOMAIN` is a hostname for Host-header matching; `CORS_ORIGINS` is a browser origin and must carry `https://`.
 
@@ -272,7 +284,31 @@ The setup script offers to install **nmap**. Without it, port scanning falls bac
 NMAP_DEEP_SCAN=true
 ```
 
-turns the default probe into every one of the 65,535 TCP ports, maximum version intensity, and the `safe,version,discovery,default,vuln` NSE categories with `vulns.showall`. NSE output is parsed into findings — a `VULNERABLE:` result becomes a medium-severity finding attributed to its port.
+turns the default probe into a sweep of `NMAP_DEEP_PORTS` (ports 1-10000 by default), maximum version intensity, and the NSE scripts matched by `NMAP_DEEP_SCRIPTS`. The range stops short of all 65,535 because every open port also draws version probes and a script run — an all-ports sweep runs past `SCAN_TIMEOUT_NMAP_DEEP`, and a scan that times out reports nothing at all. Set `NMAP_DEEP_PORTS=1-65535` if you have the hours. MongoDB (27017) and Elasticsearch (9300) sit above the default range — name them if you want them: `1-10000,9300,27017`. NSE output is parsed into findings — a `VULNERABLE:` result becomes a medium-severity finding attributed to its port.
+
+**Why a script list, not a category.** `--script all` is 611 scripts and `--script default` is over 100, and neither is chosen for what this tool looks at. Worse, both include things that do more than look:
+
+- **`broadcast-*`** run in nmap's *pre-scan* phase, before your target is touched at all. They enumerate **the scanning machine's own network** — DHCP servers, MAC addresses, internal DNS, per-interface topology — and write it into a report about someone else's host. `broadcast-dhcp-discover` is categorised `safe`, so an allow-list built from `safe` or `default` still pulls it in.
+- **`brute`** attempt credentials. **`dos`** and **`exploit`** attack rather than observe — `http-shellshock` sends a live payload, which is why it is not in the list below.
+- Several `default` HTTP scripts walk hundreds of URL paths per port. Directory discovery belongs to the ffuf/gobuster module, not to the port scanner.
+
+`NMAP_DEEP_SCRIPTS` is instead a named list of **50**, covering TLS posture, HTTP configuration, service and version disclosure, and the vuln checks whose signal justifies their cost:
+
+| Area | Scripts |
+|---|---|
+| TLS | `ssl-cert` `ssl-enum-ciphers` `ssl-date` `ssl-dh-params` `ssl-heartbleed` `ssl-poodle` `ssl-ccs-injection` `sslv2-drown` `tls-alpn` |
+| HTTP | `http-title` `http-headers` `http-server-header` `http-methods` `http-security-headers` `http-robots.txt` `http-git` `http-open-proxy` `http-cors` `http-cookie-flags` `http-webdav-scan` `http-auth` `http-internal-ip-disclosure` `http-trace` `http-generator` `http-vuln-cve2017-5638` |
+| SSH / DNS | `ssh-hostkey` `ssh2-enum-algos` `ssh-auth-methods` `dns-recursion` `dns-nsid` `dns-zone-transfer` |
+| SMB | `smb-os-discovery` `smb-security-mode` `smb2-security-mode` `smb-protocols` `smb-vuln-ms17-010` |
+| Databases | `mysql-info` `mysql-empty-password` `ms-sql-info` `mongodb-info` `redis-info` |
+| Mail / FTP | `smtp-commands` `smtp-open-relay` `imap-capabilities` `ftp-anon` `ftp-syst` |
+| Remote access | `rdp-ntlm-info` `rdp-enum-encryption` `vnc-info` `banner` |
+
+Every one is detection-only. The setting takes any nmap `--script` expression, so a category selector or `all` can be set instead — check it first:
+
+```bash
+nmap --script-help "<your expression>"
+```
 
 **It is off by default on purpose.** The standard profiles promise bounded, non-intrusive traffic; NSE vuln scripts actively probe rather than observe, and a scan that took 10 seconds now takes minutes. Turn it on where you would be comfortable running nmap by hand against the same target.
 

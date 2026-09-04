@@ -268,8 +268,62 @@ button { cursor: pointer; background: none; border: none; }
   margin-right: auto;
 }
 .wc-card-icons { display: flex; gap: .45rem; color: var(--faint); font-size: .78rem; }
-.wc-card-icons > * { cursor: pointer; transition: color .15s; }
+/* These were <button>s inheriting nothing, so they arrived with the UA's grey
+   chrome. Reset to bare glyphs and give them a real focus ring: they are now
+   the only controls on a card and have to be reachable from the keyboard. */
+.wc-card-icons > * {
+  cursor: pointer;
+  transition: color .15s, transform .15s;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  line-height: 1;
+}
 .wc-card-icons > *:hover { color: var(--text); }
+.wc-card-icons > *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wc-card-icons > *[disabled] { opacity: .4; cursor: progress; }
+.card-refresh-btn:hover { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .wc-card-icons > * { transition: none; }
+  .card-refresh-btn:hover { transform: none; }
+}
+
+/* Refresh feedback. The card stays readable while its check re-runs -- the
+   old result is still true until the new one arrives, so it is dimmed rather
+   than blanked. */
+.wc-card.card-refreshing { opacity: .55; }
+.card-refresh-status {
+  margin: .5rem .9rem .8rem;
+  padding: .4rem .6rem;
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+}
+.card-refresh-status.is-error { color: var(--high); border-left-color: var(--high); }
+.wc-card.card-refreshed { animation: cardRefreshed 1.2s ease-out; }
+@keyframes cardRefreshed {
+  from { background: var(--surface-2); }
+  to   { background: var(--surface); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wc-card.card-refreshed { animation: none; }
+}
+
+/* Section reference modal. Prose, not data -- so it gets a reading measure
+   and the body face rather than the monospace the finding modal uses. */
+.info-box { max-width: 640px; }
+.info-text {
+  margin: 0;
+  max-width: 64ch;
+  font-size: .86rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+.info-tool { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
 /*
    A cap on body height, because one card was running past 1000px — the CVE
    list on a CDN-fronted host returns dozens of entries — and the masonry
@@ -410,6 +464,17 @@ button { cursor: pointer; background: none; border: none; }
 .port-danger { color: var(--high); font-family: var(--mono); }
 .port-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .6rem; }
 .port-info-item { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+/* Prose in the ports card, for when there is no table to show and the reason
+   has to be stated instead. Measure is capped so it reads as a sentence
+   rather than a wall spanning the full card. */
+.port-note {
+  margin: .55rem 0 0;
+  max-width: 58ch;
+  font-size: .82rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.port-note.dim { color: var(--faint); font-size: .78rem; }
 
 /* ── Danger mode ─────────────────────────────────────────────────────── */
 /* The one place saturated colour is allowed on chrome: this section reports

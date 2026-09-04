@@ -257,6 +257,59 @@ class Settings:
         # port and identifies more services; 7 is thorough without the long
         # tail of rare probes that 9 adds.
         self.NMAP_VERSION_INTENSITY = min(9, _env_int("NMAP_VERSION_INTENSITY", 7, minimum=0))
+
+        # Which TCP ports a deep scan covers. All 65535 is the thorough
+        # answer and the impractical one: with -sV and NSE on every open
+        # port it does not finish inside any sane timeout, and a scan that
+        # times out reports nothing at all. 1-10000 covers the ports that
+        # actually carry internet-facing services, and finishes.
+        #
+        # Worth knowing what falls outside it: MongoDB's 27017 and
+        # Elasticsearch's 9300 both sit above 10000. Name them explicitly
+        # if you care -- "1-10000,9300,27017" is a valid value.
+        self.NMAP_DEEP_PORTS = _env_str("NMAP_DEEP_PORTS", "1-10000")
+
+        # Which NSE scripts a deep scan runs.
+        #
+        # A named list of 50, not a category expression. Categories are the
+        # wrong unit here on both counts: too broad (`default` alone is
+        # 100+ scripts, several of which walk hundreds of URL paths per HTTP
+        # port) and not curated for what this tool actually looks at, which
+        # is an internet-facing host. This list is TLS posture, HTTP
+        # configuration and headers, service and version disclosure, and
+        # the few vuln checks whose signal justifies their cost.
+        #
+        # Every entry is detection-only. Nothing here brute-forces
+        # credentials, floods, or carries an exploit payload -- notably
+        # absent is http-shellshock, which nmap classes as `exploit`
+        # because it sends a live payload rather than fingerprinting.
+        #
+        # Any nmap --script expression is accepted, so a category selector
+        # or "all" can be set here instead. Check one before trusting it:
+        #     nmap --script-help "<expression>"
+        self.NMAP_DEEP_SCRIPTS = _env_str(
+            "NMAP_DEEP_SCRIPTS",
+            "ssl-cert,ssl-enum-ciphers,ssl-date,ssl-dh-params,"
+            "ssl-heartbleed,ssl-poodle,ssl-ccs-injection,sslv2-drown,"
+            "tls-alpn,http-title,http-headers,http-server-header,"
+            "http-methods,http-security-headers,http-robots.txt,http-git,"
+            "http-open-proxy,http-cors,http-cookie-flags,"
+            "http-webdav-scan,http-auth,http-internal-ip-disclosure,"
+            "http-trace,http-generator,http-vuln-cve2017-5638,"
+            "ssh-hostkey,ssh2-enum-algos,ssh-auth-methods,dns-recursion,"
+            "dns-nsid,dns-zone-transfer,smb-os-discovery,"
+            "smb-security-mode,smb2-security-mode,smb-protocols,"
+            "smb-vuln-ms17-010,mysql-info,mysql-empty-password,"
+            "ms-sql-info,mongodb-info,redis-info,smtp-commands,"
+            "smtp-open-relay,imap-capabilities,ftp-anon,ftp-syst,"
+            "rdp-ntlm-info,rdp-enum-encryption,vnc-info,banner"
+        )
+
+        # Where -oA writes its .nmap/.gnmap/.xml artifacts during a deep scan.
+        # Empty means do not write them at all, which is the default: raw scan
+        # output of someone else's infrastructure is not something to leave on
+        # disk by accident.
+        self.NMAP_OUTPUT_DIR = _env_str("NMAP_OUTPUT_DIR", "")
         self.SCAN_TIMEOUT_NUCLEI = _env_int("SCAN_TIMEOUT_NUCLEI", 600, minimum=1)
         self.SCAN_TIMEOUT_DEFAULT = _env_int("SCAN_TIMEOUT_DEFAULT", 120, minimum=1)
         self.JS_ANALYSIS_MAX_FILES = _env_int("JS_ANALYSIS_MAX_FILES", 20, minimum=1)

@@ -78,3 +78,9 @@ admin_token.txt
 # Local editor/agent tooling. The UI/UX skill is 3.6MB of vendored
 # third-party data, not part of ReconTitan — install it per machine.
 .claude/skills/
+
+# Raw nmap artifacts from NMAP_OUTPUT_DIR (-oA writes .nmap/.gnmap/.xml).
+# These hold full scan output for someone else's infrastructure plus local
+# filesystem paths, and with a broad --script selector they can also capture
+# the scanning machine's own network. Never commit them.
+scans/

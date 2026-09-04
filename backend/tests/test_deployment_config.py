@@ -327,3 +327,91 @@ def test_ci_supplies_every_required_compose_variable():
         f"docker-compose.yml requires {missing}, which the CI workflow never sets; "
         "the Validate Compose configuration step will fail"
     )
+
+
+# ── Scan depth follows the authorisation gate ───────────────────────────────
+
+def test_danger_scans_use_the_deep_port_profile(monkeypatch):
+    """Depth belongs to the danger gate, not a global switch.
+
+    A user who typed the authorisation phrase should get the thorough scan
+    without also having to set NMAP_DEEP_SCAN, and a plain Full scan should
+    keep the bounded traffic its description promises.
+    """
+    from app.tasks.recon import port_scan
+
+    monkeypatch.setattr(port_scan.settings, "NMAP_DEEP_SCAN", False)
+    token = port_scan.DANGER_ACTIVE.set(True)
+    try:
+        assert port_scan.deep_scan_requested() is True
+    finally:
+        port_scan.DANGER_ACTIVE.reset(token)
+
+
+def test_a_full_scan_stays_shallow_by_default(monkeypatch):
+    from app.tasks.recon import port_scan
+
+    monkeypatch.setattr(port_scan.settings, "NMAP_DEEP_SCAN", False)
+    assert port_scan.deep_scan_requested() is False
+
+
+def test_the_deep_profile_excludes_destructive_scripts(monkeypatch):
+    """The deep scan selects NSE scripts, it does not run `all`.
+
+    `all` is the selector that makes the scan untruthful about itself. It pulls
+    in brute (credential attacks), dos and exploit (which attack rather than
+    observe), and broadcast-* scripts, which run before the target is touched
+    and enumerate the SCANNER's own LAN into the report.
+
+    This asserts on the --script argument specifically rather than on the
+    command as a string. An exclusion expression names the categories it
+    excludes, so "brute" can legitimately appear in the command as `not
+    (... brute ...)`; a substring search over the whole command cannot tell
+    that apart from actually running them.
+    """
+    from unittest import mock
+    from app.tasks.recon import port_scan
+
+    captured = {}
+
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+
+        class Result:
+            stdout = ""
+        return Result()
+
+    token = port_scan.DANGER_ACTIVE.set(True)
+    try:
+        with mock.patch.object(port_scan, "_find_binary", return_value="nmap"),              mock.patch.object(port_scan.subprocess, "run", fake_run),              mock.patch.object(port_scan, "_has_raw_socket_privilege", return_value=True):
+            port_scan._nmap_subprocess("93.184.216.34")
+    finally:
+        port_scan.DANGER_ACTIVE.reset(token)
+
+    argv = captured["argv"]
+    selector = argv[argv.index("--script") + 1]
+
+    assert selector.strip() != "all", "--script all must never reach nmap"
+
+    # The default is a named list. Assert the property that matters -- no
+    # attack script is named -- rather than the shape of the selector, so
+    # this keeps working if it is ever switched back to a category
+    # expression. Names, not substrings: "smtp-open-relay" contains neither
+    # of these, but a naive `"brute" in selector` would flag the legitimate
+    # `not (brute)` of an exclusion expression.
+    named = {n.strip() for n in selector.split(",")}
+    for script in named:
+        assert "brute" not in script, f"{script!r} attempts credentials"
+        assert "shellshock" not in script, (
+            f"{script!r} is in nmap's exploit category: it sends a live payload"
+        )
+        assert not script.startswith("broadcast-"), (
+            f"{script!r} runs pre-scan and enumerates the scanner's own LAN"
+        )
+
+    assert "-p-" not in argv, "the deep scan must use a bounded port range"
+
+    # Timing and rate are deliberately not asserted here. They are loudness,
+    # which is the operator's call and is disclosed on the gate; the list above
+    # is truthfulness, which is not. Adding any of those would falsify the
+    # promises the gate makes before a user authorises the scan.

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=25">
+<link rel="stylesheet" href="report.css?v=27">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
@@ -162,7 +162,36 @@
   </div>
 </div>
 
-<script src="report.js?v=23"></script>
+<!-- Section reference, opened by the ⓘ on each card. Separate from the finding
+     modal above: that one explains one result, this one explains the section. -->
+<div class="modal-overlay" id="infoModal" style="display:none">
+  <div class="modal-box info-box">
+    <div class="modal-hdr">
+      <h3 id="infoTitle"></h3>
+      <button class="modal-close" id="infoClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-block">
+        <div class="modal-lbl">WHAT THIS SHOWS</div>
+        <p class="info-text" id="infoWhat"></p>
+      </div>
+      <div class="modal-block">
+        <div class="modal-lbl">HOW IT IS GATHERED</div>
+        <p class="info-text" id="infoHow"></p>
+      </div>
+      <div class="modal-block">
+        <div class="modal-lbl">HOW TO READ IT</div>
+        <p class="info-text" id="infoRead"></p>
+      </div>
+      <div class="modal-block" id="infoToolRow">
+        <div class="modal-lbl">SCANNER</div>
+        <p class="info-text info-tool" id="infoTool"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="report.js?v=25"></script>
 <script src="globe.js?v=3" defer></script>
 </body>
 </html>

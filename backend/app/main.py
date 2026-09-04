@@ -164,8 +164,36 @@ async def health_check():
 
 
 # ── Frontend Static Files ──
+class RevalidatingStaticFiles(StaticFiles):
+    """StaticFiles that makes the browser check before reusing a cached asset.
+
+    Without this, a browser may hold a heuristically-cached copy of report.js
+    indefinitely and never ask whether it changed. That produced a genuinely
+    confusing failure: the page kept rendering a fixed-and-redeployed card
+    from a stale script, so the bug looked unfixed on a server serving correct
+    code.
+
+    "no-cache" does not mean "do not cache" — it means "revalidate first".
+    The browser still keeps the file and still gets a 304 from the ETag
+    StaticFiles already sends, so the cost is one conditional request per
+    asset, not a re-download.
+
+    The ?v= stamps in the HTML remain valid and harmless; this just means
+    forgetting to bump one is no longer a silent failure.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+
 # MUST be the last mount — catches all unmatched routes.
-app.mount("/", StaticFiles(directory=str(settings.FRONTEND_DIR), html=True), name="frontend")
+app.mount(
+    "/",
+    RevalidatingStaticFiles(directory=str(settings.FRONTEND_DIR), html=True),
+    name="frontend",
+)
 
 
 # ── Entry Point ──
