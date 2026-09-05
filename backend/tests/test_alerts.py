@@ -33,20 +33,20 @@ def report(**counts):
 
 
 def test_only_high_and_critical_counts_trigger_by_default():
-    assert alerts.alert_counts(report(critical="2", high=1, low=999)) == {"critical": 2, "high": 1}
+    assert alerts.alert_counts(report(critical="2", high=1, low=999)) == {"urgent": 0, "critical": 2, "high": 1}
     assert alerts.send_scan_alert(report(low=99))["status"] == "not_triggered"
 
 
 def test_queued_records_without_precomputed_counts_still_trigger():
     queued_record = report()
     queued_record.pop("severity_counts")
-    assert alerts.alert_counts(queued_record) == {"critical": 1, "high": 1}
+    assert alerts.alert_counts(queued_record) == {"urgent": 0, "critical": 1, "high": 1}
 
 
 def test_critical_threshold_ignores_high(monkeypatch):
     monkeypatch.setattr(alerts.settings, "ALERT_MIN_SEVERITY", "critical")
     assert alerts.send_scan_alert(report(high=1))["status"] == "not_triggered"
-    assert alerts.alert_counts(report(critical=1, high=9)) == {"critical": 1}
+    assert alerts.alert_counts(report(critical=1, high=9)) == {"urgent": 0, "critical": 1}
 
 
 def test_disabled_alerts_do_not_open_smtp(monkeypatch):
@@ -72,7 +72,7 @@ def test_configured_alert_uses_tls_auth_and_never_includes_evidence(monkeypatch)
     payload = report(critical=1, high=1)
     payload["findings"][0]["evidence"] = "super-secret-token"
     result = alerts.send_scan_alert(payload)
-    assert result == {"status": "sent", "counts": {"critical": 1, "high": 1}}
+    assert result == {"status": "sent", "counts": {"urgent": 0, "critical": 1, "high": 1}}
     assert sent["host"] == "smtp.example.com" and sent["port"] == 587 and sent["timeout"] == 9
     assert sent["ehlo"] == 2 and sent["login"] == ("scanner", "not-a-real-password")
     assert isinstance(sent["message"], EmailMessage)
@@ -95,3 +95,12 @@ def test_message_headers_and_titles_cannot_be_split_by_finding_data():
     message = alerts._message(report(critical=1), {"critical": 1, "high": 0})
     assert "\n" not in str(message["Subject"])
     assert "Header\ninjection" not in message.get_content()
+
+
+def test_urgent_exploit_priority_triggers_even_below_severity_threshold():
+    payload = report(low=1)
+    payload["findings"] = [{
+        "severity": "low", "exploit_priority": "urgent", "title": "Known exploited CVE",
+    }]
+    assert alerts.alert_counts(payload) == {"urgent": 1, "critical": 0, "high": 0}
+    assert alerts.send_scan_alert(payload)["status"] == "disabled"

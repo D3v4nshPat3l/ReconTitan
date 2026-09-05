@@ -51,6 +51,30 @@ def test_pdf_report_handles_structured_evidence_and_large_wrapped_values():
     assert len(content) > 10_000
 
 
+def test_pdf_report_renders_exploit_priority_metadata():
+    content = build_pdf_report({
+        "scan_id": "priority-test",
+        "target": "example.com",
+        "findings": [{
+            "id": "finding_kev",
+            "tool": "nvd_cve",
+            "category": "cve_finding",
+            "severity": "critical",
+            "title": "Version-confirmed CVE",
+            "description": "Known exploitation should be visible in the export.",
+            "evidence": "CISA KEV: known exploited",
+            "cve_id": "CVE-2021-44228",
+            "cvss_score": 10.0,
+            "kev_status": "known_exploited",
+            "epss_score": 0.999,
+            "epss_percentile": 1.0,
+            "exploit_priority": "urgent",
+        }],
+    })
+    assert content.startswith(b"%PDF-")
+    assert len(content) > 2_000
+
+
 DANGER_PAYLOAD = {
     "scan_id": "scan_abcdef123456",
     "target": "example.com",
