@@ -299,13 +299,18 @@ function createAttackSurfaceTree(root, onOpenFinding) {
     row.appendChild(button);
 
     let childList = null;
+    let childClip = null;
     let childButtons = [];
     if (item.children.length) {
+      childClip = doc.createElement('div');
+      childClip.className = 'surface-tree-clip';
       childList = doc.createElement('ul');
       childList.className = 'surface-tree-children';
       childList.setAttribute('role', 'group');
       const openByDefault = depth === 0;
-      childList.hidden = !openByDefault;
+      let openState = openByDefault;
+      childClip.className = openByDefault ? 'surface-tree-clip' : 'surface-tree-clip is-collapsed';
+      childClip.setAttribute('aria-hidden', String(!openByDefault));
       row.setAttribute('aria-expanded', String(openByDefault));
       button.setAttribute('aria-expanded', String(openByDefault));
       for (const child of item.children) {
@@ -313,15 +318,18 @@ function createAttackSurfaceTree(root, onOpenFinding) {
         childButtons.push(rendered.button);
         childList.appendChild(rendered.row);
       }
-      row.appendChild(childList);
+      childClip.appendChild(childList);
+      row.appendChild(childClip);
       const branch = {
         depth,
         setOpen(open) {
-          childList.hidden = !open;
-          row.setAttribute('aria-expanded', String(open));
-          button.setAttribute('aria-expanded', String(open));
+          openState = Boolean(open);
+          childClip.className = openState ? 'surface-tree-clip' : 'surface-tree-clip is-collapsed';
+          childClip.setAttribute('aria-hidden', String(!openState));
+          row.setAttribute('aria-expanded', String(openState));
+          button.setAttribute('aria-expanded', String(openState));
         },
-        isOpen() { return !childList.hidden; },
+        isOpen() { return openState; },
       };
       branches.push(branch);
       button.addEventListener('click', () => branch.setOpen(!branch.isOpen()));
