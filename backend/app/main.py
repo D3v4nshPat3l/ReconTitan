@@ -126,7 +126,7 @@ async def method_not_allowed_handler(request: Request, exc):
 
 
 # ── Routers ──
-from app.routers import ai, capabilities, news, reports, scans, test_scan
+from app.routers import ai, capabilities, news, reports, scans, test_scan, triage
 
 app.include_router(capabilities.router)
 app.include_router(ai.router)
@@ -134,6 +134,7 @@ app.include_router(scans.router)
 app.include_router(reports.router)
 app.include_router(news.router)
 app.include_router(test_scan.router)
+app.include_router(triage.router)
 
 # On a server deployment the admin console is a separate ASGI app on its own
 # loopback-only port, which is what makes it unreachable from the internet.

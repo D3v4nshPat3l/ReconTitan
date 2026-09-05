@@ -298,6 +298,22 @@ def _scan_events(http_request: Request, target: str, scan_type: ScanType):
     if danger_session is not None:
         payload["danger_summary"] = danger_session.summary().model_dump(mode="json")
 
+    # Triage first, because it changes what the rest of the report counts. A
+    # finding somebody has already reviewed and dismissed should not inflate
+    # the severity bar or anchor an attack path. Nothing is removed: the
+    # findings list keeps everything, and triage_summary states what is
+    # suppressed and why.
+    try:
+        from app.services import triage as triage_service
+
+        triage_service.apply_to_report(payload)
+        correlation_input = dict(payload)
+        correlation_input["findings"] = triage_service.active_findings(all_findings)
+    except Exception:
+        logger.exception("[test] triage could not be applied for %s", target)
+        payload.setdefault("triage_summary", {})
+        correlation_input = payload
+
     # Correlation, not collection: this joins findings that already exist into
     # entry -> service -> software -> technique chains. It sends no traffic and
     # cannot fail the scan, so a bug here must not cost the caller a report
@@ -305,7 +321,7 @@ def _scan_events(http_request: Request, target: str, scan_type: ScanType):
     try:
         from app.services.attack_paths import build_attack_paths
 
-        payload["attack_paths"] = build_attack_paths(payload)
+        payload["attack_paths"] = build_attack_paths(correlation_input)
     except Exception:
         logger.exception("[test] attack path correlation failed for %s", target)
         payload["attack_paths"] = []
