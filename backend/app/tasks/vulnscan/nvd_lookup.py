@@ -35,6 +35,7 @@ import requests
 from app.config import settings
 from app.tasks.recon.tech_stack import run_tech_stack_detection
 from app.tasks.vulnscan import cpe as cpe_module
+from app.tasks.vulnscan.exploit_priority import enrich_cve_findings
 from app.tasks.vulnscan.vuln_tools import extract_cvss, run_nvd_cve_lookup
 
 logger = logging.getLogger("recontitan.nvd")
@@ -221,7 +222,10 @@ def run_nvd_for_target(target: str) -> list[dict]:
             versionless.append(name)
             findings.extend(_query_cpe(cpe_string, name, "", "product_match"))
 
+    findings = enrich_cve_findings(findings)
     confirmed = sum(1 for f in findings if f.get("confidence") == "version_match")
+    urgent = sum(1 for f in findings if f.get("exploit_priority") == "urgent")
+    high_priority = sum(1 for f in findings if f.get("exploit_priority") == "high")
     findings.append({
         "tool": "nvd_cve",
         "category": "cve_lookup",
@@ -235,6 +239,7 @@ def run_nvd_for_target(target: str) -> list[dict]:
         "evidence": "\n".join(filter(None, [
             f"Target: {target}",
             f"Technologies matched by version: {confirmed}",
+            f"Exploit priority — urgent: {urgent}, high: {high_priority}",
             f"Detected without a version: {', '.join(versionless)}" if versionless else "",
             f"Not in the CPE catalogue: {', '.join(unmapped)}" if unmapped else "",
             f"NVD API key in use: {'yes' if settings.NVD_API_KEY else 'no (rate limited to 5 req/30s)'}",
