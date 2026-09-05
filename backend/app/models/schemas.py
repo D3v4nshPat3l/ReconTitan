@@ -25,6 +25,20 @@ class SeverityLevel(str, Enum):
     INFO = "info"
 
 
+class KevStatus(str, Enum):
+    KNOWN_EXPLOITED = "known_exploited"
+    NOT_LISTED = "not_listed"
+    UNAVAILABLE = "unavailable"
+
+
+class ExploitPriority(str, Enum):
+    URGENT = "urgent"
+    HIGH = "high"
+    ELEVATED = "elevated"
+    STANDARD = "standard"
+    VERIFY = "verify"
+
+
 class ScanPhase(str, Enum):
     RECON = "recon"
     OSINT = "osint"
@@ -170,6 +184,18 @@ class Finding(BaseModel):
     evidence: Optional[str] = None
     cve_id: Optional[str] = None
     cvss_score: Optional[float] = None
+    # Threat activity is deliberately separate from CVSS severity. A severe
+    # bug is not automatically being exploited, and a KEV entry still needs a
+    # confirmed product/version match before ReconTitan labels it urgent.
+    kev_status: Optional[KevStatus] = None
+    kev_date_added: Optional[str] = None
+    kev_due_date: Optional[str] = None
+    kev_required_action: Optional[str] = None
+    kev_ransomware_use: Optional[str] = None
+    epss_score: Optional[float] = Field(default=None, ge=0, le=1)
+    epss_percentile: Optional[float] = Field(default=None, ge=0, le=1)
+    exploit_priority: Optional[ExploitPriority] = None
+    priority_reasons: list[str] = Field(default_factory=list, max_length=12)
     remediation: Optional[str] = None
     ai_explanation: Optional[str] = None
     verified: bool = False
