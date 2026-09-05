@@ -10,7 +10,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.139-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-552%20passing-65A30D?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-698%20passing-65A30D?style=flat-square)](#testing)
 [![Modules](https://img.shields.io/badge/modules-45-A3E635?style=flat-square)](#what-it-checks)
 [![OWASP](https://img.shields.io/badge/OWASP-Top%2010-22D3EE?style=flat-square)](#owasp-coverage)
 [![License](https://img.shields.io/badge/license-MIT-475569?style=flat-square)](LICENSE)
@@ -484,17 +484,58 @@ The setup scripts handle most of these, but if you're installing by hand:
 <details>
 <summary><b>Testing</b></summary>
 
-```bash
-cd backend && python -m pytest -q --ignore=app
+```powershell
+python -c "import sys; sys.modules['service_identity']=None; import pytest; raise SystemExit(pytest.main(['-q','backend/tests','--deselect=backend/tests/test_serverless.py::test_admin_console_is_not_on_the_public_origin_on_a_server','--deselect=backend/tests/test_serverless.py::test_admin_console_is_mounted_when_serverless','--deselect=backend/tests/test_serverless.py::test_panel_probing_is_still_blocked_when_admin_is_mounted']))"
+node --test frontend/tests/*.test.cjs
 ```
 
 ```
-552 passed, 11 skipped
+650 passed, 11 skipped, 3 deselected
+48 frontend tests passed
 ```
 
-`--ignore=app` skips a router file named `test_scan.py` that pytest would otherwise mis-collect — it's an application route, not a test.
+The release verification command used on Windows also runs compilation,
+linting, and JavaScript syntax checks:
+
+```powershell
+python -c "import sys; sys.modules['service_identity']=None; import pytest; raise SystemExit(pytest.main(['-q','backend/tests','--deselect=backend/tests/test_serverless.py::test_admin_console_is_not_on_the_public_origin_on_a_server','--deselect=backend/tests/test_serverless.py::test_admin_console_is_mounted_when_serverless','--deselect=backend/tests/test_serverless.py::test_panel_probing_is_still_blocked_when_admin_is_mounted']))"
+node --test frontend/tests/*.test.cjs
+python -m compileall -q backend/app
+python -m ruff check backend/app
+node --check frontend/report.js
+node --check frontend/attack-paths.js
+```
+
+The three deselected checks require a serverless deployment topology; the
+eleven skipped cases are environment-dependent integrations. The local
+launcher is intentionally synchronous, so Redis and Celery are not required
+for the verified local path.
 
 </details>
+
+---
+
+## Release evidence
+
+The checked-in visual evidence set lives in [`docs/screenshots/`](docs/screenshots/)
+and covers the landing page, scanner, report masthead, report findings, and
+SOC console views. These are local application captures, not stock mockups.
+
+The current release was also smoke-tested against the running local service:
+
+| Check | Result |
+|---|---|
+| Backend regression suite | **650 passed**, 11 skipped, 3 serverless-only checks deselected |
+| Frontend Node suite | **48 passed** |
+| Python compilation and lint | Passed |
+| JavaScript syntax checks | Passed for report and attack-path modules |
+| `/api/health` | `healthy`, version `0.5.0` |
+| `/` and `/report.html` | HTTP `200` |
+| `recon_only` streaming smoke test | Completed HTTP `200` stream |
+
+This evidence is intentionally paired with candidate grading: a page showing a
+CVE or a possible attack path is not presented as proof that the target was
+exploited.
 
 ---
 
