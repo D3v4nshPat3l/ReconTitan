@@ -176,68 +176,55 @@ button { cursor: pointer; background: none; border: none; }
   font-size: .73rem;
 }
 .surface-tree-scroll {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: visible;
   min-height: 340px;
-  padding: .65rem 1rem 2rem;
+  padding: .65rem 0 2rem;
 }
 .surface-tree-root,
 .surface-tree-children {
   display: flex;
-  width: max-content;
-  min-width: 100%;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .surface-tree-children {
   position: relative;
-  margin-top: 0;
-  padding-top: 2rem;
-}
-.surface-tree-children::before {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  height: 1rem;
+  margin: .35rem 0 0;
+  padding: 0 0 0 1.35rem;
   border-left: 1px solid var(--line);
-  content: '';
 }
 .surface-tree-node {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
   margin: 0;
 }
 .surface-tree-children > .surface-tree-node {
-  padding: 1rem .45rem 0;
+  padding: .35rem 0;
 }
-.surface-tree-children > .surface-tree-node::before,
-.surface-tree-children > .surface-tree-node::after {
+.surface-tree-children > .surface-tree-node::before {
   position: absolute;
-  top: 0;
-  right: 50%;
-  width: 50%;
-  height: 1rem;
+  top: 1.85rem;
+  left: -1.35rem;
+  width: 1.1rem;
   border-top: 1px solid var(--line);
   content: '';
 }
-.surface-tree-children > .surface-tree-node::after {
-  right: auto;
-  left: 50%;
-  border-left: 1px solid var(--line);
-}
-.surface-tree-children > .surface-tree-node:first-child::before,
-.surface-tree-children > .surface-tree-node:last-child::after { border-top-color: transparent; }
-.surface-tree-children > .surface-tree-node:only-child::before,
-.surface-tree-children > .surface-tree-node:only-child::after { border-top-color: transparent; }
 .surface-tree-button {
   display: grid;
   grid-template-columns: 1rem minmax(0, 1fr) auto;
   align-items: center;
   gap: .55rem;
-  width: 230px;
+  width: 100%;
+  min-width: 0;
   min-height: 3rem;
   padding: .55rem .68rem;
   border: 1px solid var(--line);
@@ -266,7 +253,6 @@ button { cursor: pointer; background: none; border: none; }
   content: '';
 }
 .surface-tree-target > .surface-tree-button {
-  width: 290px;
   border-top: 3px solid var(--accent);
   background: var(--accent-wash);
 }
@@ -310,9 +296,9 @@ button { cursor: pointer; background: none; border: none; }
   .attack-surface-tree { margin: 0 1rem 1rem; padding: 1rem; }
   .surface-tree-head { display: block; }
   .surface-tree-actions { margin-top: .85rem; }
-  .surface-tree-scroll { margin: 0 -1rem; padding-right: 1rem; padding-left: 1rem; }
-  .surface-tree-button { width: 200px; }
-  .surface-tree-target > .surface-tree-button { width: 250px; }
+  .surface-tree-scroll { margin: 0; }
+  .surface-tree-children { padding-left: .8rem; }
+  .surface-tree-children > .surface-tree-node::before { left: -.8rem; width: .65rem; }
   .surface-tree-detail { white-space: normal; }
 }
 
