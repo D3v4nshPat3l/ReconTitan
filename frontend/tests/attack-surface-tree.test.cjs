@@ -123,8 +123,10 @@ test('controller expands downward, collapses branches, and opens finding evidenc
   const groupRow = nodes.find(item => item.className.includes('surface-tree-group'));
   assert.equal(rootRow.getAttribute('aria-expanded'), 'true');
   assert.equal(groupRow.getAttribute('aria-expanded'), 'false');
+  assert.match(groupRow.children[1].className, /is-collapsed/);
   groupRow.children[0].fire('click');
   assert.equal(groupRow.getAttribute('aria-expanded'), 'true');
+  assert.doesNotMatch(groupRow.children[1].className, /is-collapsed/);
   ui.elements.collapseAll.fire('click');
   assert.equal(rootRow.getAttribute('aria-expanded'), 'true');
   assert.equal(groupRow.getAttribute('aria-expanded'), 'false');
@@ -145,7 +147,7 @@ test('down and up keyboard arrows follow the top-to-bottom hierarchy', () => {
   button.fire('keydown', { key: 'ArrowDown' });
   assert.equal(groupRow.getAttribute('aria-expanded'), 'true');
   button.fire('keydown', { key: 'ArrowDown' });
-  const childList = groupRow.children[1];
+  const childList = groupRow.children[1].children[0];
   assert.equal(childList.children[0].children[0].focused, true);
 });
 
@@ -186,4 +188,7 @@ test('tree layout stacks nodes vertically without a horizontal canvas', () => {
   assert.match(listRule, /flex-direction:\s*column/);
   assert.match(listRule, /width:\s*100%/);
   assert.doesNotMatch(listRule, /max-content/);
+  assert.match(css, /\.surface-tree-clip\.is-collapsed/);
+  assert.match(css, /grid-template-rows:\s*0fr/);
+  assert.match(css, /@keyframes surface-tree-enter/);
 });
