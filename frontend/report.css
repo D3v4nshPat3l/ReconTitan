@@ -682,6 +682,23 @@ button { cursor: pointer; background: none; border: none; }
   color: var(--faint);
 }
 .finding-has-fix { color: var(--ok); }
+.threat-kev { color: var(--critical); font-weight: 700; }
+
+.exploit-priority {
+  display: inline-block;
+  margin-left: .3rem;
+  padding: .1rem .42rem;
+  border: 1px solid currentColor;
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .07em;
+  vertical-align: .08rem;
+}
+.priority-urgent { color: var(--critical); background: rgba(255, 71, 87, .08); }
+.priority-high { color: var(--high); }
+.priority-elevated { color: var(--medium); }
+.priority-standard { color: var(--ok); }
+.priority-verify { color: var(--info); }
 
 .finding-item.sev-critical, .finding-item[data-sev="critical"] { border-left-color: var(--critical); }
 .finding-item.sev-high,     .finding-item[data-sev="high"]     { border-left-color: var(--high); }
@@ -938,6 +955,13 @@ button { cursor: pointer; background: none; border: none; }
 }
 .modal-cve { font-family: var(--mono); color: var(--accent); }
 .modal-cve:hover { text-decoration: underline; }
+.priority-summary { margin-bottom: .65rem; }
+.priority-reasons {
+  margin: .7rem 0 0 1.1rem;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.6;
+}
 .modal-meta {
   padding-top: 1rem;
   border-top: 1px solid var(--line-soft);

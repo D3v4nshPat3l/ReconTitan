@@ -577,17 +577,35 @@ function renderThreatIntel(findings) {
 function renderVulns(findings) {
   const vulns = findings.filter(f=>['vulnerability','cve_finding','injection','secret_leak','subdomain_takeover','javascript_secret','javascript_risky_sink'].includes(f.category));
   if (!vulns.length) return '';
-  const sorted = [...vulns].sort((a,b) => SEV[a.severity]-SEV[b.severity]);
-  const body = sorted.map(f => `
+  const priorityRank = {urgent:0, high:1, elevated:2, standard:3, verify:4};
+  const sorted = [...vulns].sort((a,b) =>
+    (priorityRank[a.exploit_priority] ?? 5) - (priorityRank[b.exploit_priority] ?? 5)
+    || SEV[a.severity]-SEV[b.severity]
+  );
+  const worstSeverity = [...vulns].sort((a,b) => SEV[a.severity]-SEV[b.severity])[0]?.severity || 'info';
+  const body = sorted.map(f => {
+    const priority = f.exploit_priority
+      ? `<span class="exploit-priority priority-${esc(f.exploit_priority)}">${esc(String(f.exploit_priority).toUpperCase())}</span>`
+      : '';
+    const threat = [];
+    if (f.kev_status === 'known_exploited') threat.push('<span class="threat-kev">CISA KEV</span>');
+    if (f.epss_score !== null && f.epss_score !== undefined && Number.isFinite(Number(f.epss_score))) {
+      threat.push(`EPSS ${(Number(f.epss_score) * 100).toFixed(1)}%`);
+    }
+    const metadata = [`<span>${esc(f.tool)} · ${esc(f.category)}</span>`, ...threat]
+      .join('<span>·</span>');
+    return `
     <div class="finding-item" ${findingRef(f)}>
       <div class="finding-item-title">
         <span class="sev-pill ${esc(f.severity)}">${esc(String(f.severity||'info').toUpperCase())}</span>
+        ${priority}
         ${esc(f.title)}
       </div>
-      <div class="finding-item-meta">${esc(f.tool)} · ${esc(f.category)}</div>
+      <div class="finding-item-meta">${metadata}</div>
       ${f.remediation?'<div class="finding-has-fix">✓ Fix available</div>':''}
-    </div>`).join('');
-  return card(`Vulnerabilities <span class="sev-pill ${sorted[0]?.severity||'info'}">${vulns.length}</span>`,
+    </div>`;
+  }).join('');
+  return card(`Vulnerabilities <span class="sev-pill ${worstSeverity}">${vulns.length}</span>`,
               body, 'red', 'card-vulns');
 }
 
@@ -1229,6 +1247,28 @@ window.openModal = function(f) {
   if (f.cve_id) { $('modalCve').textContent = f.cve_id; $('modalCve').href = `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(f.cve_id)}`; }
   $('modalCvssWrap').style.display = f.cvss_score ? 'inline' : 'none';
   if (f.cvss_score) $('modalCvss').textContent = f.cvss_score;
+  const priorityBlock = $('modalPriorityBlock');
+  if (priorityBlock) {
+    if (f.exploit_priority) {
+      priorityBlock.style.display = 'block';
+      const parts = [];
+      parts.push(`<div class="priority-summary"><span class="exploit-priority priority-${esc(f.exploit_priority)}">${esc(String(f.exploit_priority).toUpperCase())}</span></div>`);
+      parts.push(`<div class="exploit-row"><span class="exploit-key">CISA KEV</span><span class="exploit-val">${f.kev_status === 'known_exploited' ? 'Known exploited' : f.kev_status === 'not_listed' ? 'Not listed (not proof of safety)' : 'Feed unavailable / unknown'}</span></div>`);
+      const epssText = f.epss_score !== null && f.epss_score !== undefined
+        ? `${(Number(f.epss_score) * 100).toFixed(2)}% probability · ${(Number(f.epss_percentile || 0) * 100).toFixed(2)}th percentile`
+        : 'Unavailable';
+      parts.push(`<div class="exploit-row"><span class="exploit-key">EPSS</span><span class="exploit-val">${esc(epssText)}</span></div>`);
+      if (f.kev_due_date) parts.push(`<div class="exploit-row"><span class="exploit-key">KEV due date</span><span class="exploit-val">${esc(f.kev_due_date)}</span></div>`);
+      if (f.kev_ransomware_use) parts.push(`<div class="exploit-row"><span class="exploit-key">Ransomware use</span><span class="exploit-val">${esc(f.kev_ransomware_use)}</span></div>`);
+      if (f.kev_required_action) parts.push(`<div class="exploit-row"><span class="exploit-key">CISA action</span><span class="exploit-val">${esc(f.kev_required_action)}</span></div>`);
+      if (Array.isArray(f.priority_reasons) && f.priority_reasons.length) {
+        parts.push(`<ul class="priority-reasons">${f.priority_reasons.map(reason=>`<li>${esc(reason)}</li>`).join('')}</ul>`);
+      }
+      $('modalPriority').innerHTML = parts.join('');
+    } else {
+      priorityBlock.style.display = 'none';
+    }
+  }
 
   // Static explanation from local DB
   const headerName = (f.title||'').replace('Missing Security Header: ','');
