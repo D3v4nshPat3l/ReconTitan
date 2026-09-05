@@ -116,6 +116,8 @@ A real `full` scan of `example.com` — **25 modules, 34 findings, 64 seconds.**
 
 Every card is a module. Notice what an honest scanner looks like: a check that could not run says so and names its fallback rather than reporting nothing. **Subdomains** found 9 and lists them. **HTTP Security** marks five headers `Missing` with a link to analyse each. A tool that never says *"I couldn't check this"* is a tool you cannot trust.
 
+The report also turns the same evidence into an **expandable Attack Surface Tree**. The scanned target is the root; selecting a branch reveals its subdomains, IP addresses, open services, technologies, web input points, severity-grouped findings, or scanner coverage below it. Finding leaves open the existing evidence modal. The tree derives its nodes from the saved report, keeps discovered hostnames inside the scanned domain, and does not launch any extra probes.
+
 #### Every card explains itself, and every card can be re-run
 
 Two controls sit in the corner of each card.
