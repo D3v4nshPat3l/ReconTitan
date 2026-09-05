@@ -258,6 +258,19 @@ class Settings:
         self.NVD_API_KEY = os.getenv("NVD_API_KEY", "").strip()
         self.NVD_MAX_PRODUCTS = _env_int("NVD_MAX_PRODUCTS", 5, minimum=1)
 
+        # CVE exploit-awareness. Only public CVE identifiers are sent to FIRST;
+        # the scanned target, hostname, IP, and evidence never leave this app.
+        # CISA's KEV catalogue is downloaded from CISA's official GitHub mirror
+        # and both sources are cached so repeated scans do not pay the network
+        # cost for every finding.
+        self.EXPLOIT_INTEL_ENABLED = _env_bool("EXPLOIT_INTEL_ENABLED", True)
+        self.EXPLOIT_INTEL_TIMEOUT_SECONDS = _env_int(
+            "EXPLOIT_INTEL_TIMEOUT_SECONDS", 10, minimum=1,
+        )
+        self.EXPLOIT_INTEL_CACHE_TTL_SECONDS = _env_int(
+            "EXPLOIT_INTEL_CACHE_TTL_SECONDS", 21600, minimum=60,
+        )
+
         # Tool timeouts / bounded workload
         self.SCAN_TIMEOUT_NMAP = _env_int("SCAN_TIMEOUT_NMAP", 300, minimum=1)
 
