@@ -298,6 +298,18 @@ def _scan_events(http_request: Request, target: str, scan_type: ScanType):
     if danger_session is not None:
         payload["danger_summary"] = danger_session.summary().model_dump(mode="json")
 
+    # Correlation, not collection: this joins findings that already exist into
+    # entry -> service -> software -> technique chains. It sends no traffic and
+    # cannot fail the scan, so a bug here must not cost the caller a report
+    # that was otherwise complete.
+    try:
+        from app.services.attack_paths import build_attack_paths
+
+        payload["attack_paths"] = build_attack_paths(payload)
+    except Exception:
+        logger.exception("[test] attack path correlation failed for %s", target)
+        payload["attack_paths"] = []
+
     # Email delivery is best-effort and cannot change the completed scan result.
     from app.services.alerts import send_scan_alert
     send_scan_alert(payload)
