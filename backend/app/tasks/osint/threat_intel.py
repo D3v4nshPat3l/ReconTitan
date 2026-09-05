@@ -152,6 +152,9 @@ def run_shodan(target: str) -> list[dict]:
 
     except Exception as e:
         logger.warning("[shodan] Error: %s", e)
+    if any(finding.get("cve_id") for finding in findings):
+        from app.tasks.vulnscan.exploit_priority import enrich_cve_findings
+        return enrich_cve_findings(findings)
     return findings
 
 
