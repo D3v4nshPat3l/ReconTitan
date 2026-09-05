@@ -363,6 +363,10 @@ def _finding_index(findings: list[dict[str, Any]], styles) -> LongTable:
             reference_parts.append(_ascii_safe(finding["cve_id"], 50))
         if finding.get("cvss_score") is not None:
             reference_parts.append(f"CVSS {_ascii_safe(finding['cvss_score'], 20)}")
+        if finding.get("exploit_priority"):
+            reference_parts.append(_ascii_safe(str(finding["exploit_priority"]).upper(), 20))
+        if finding.get("kev_status") == "known_exploited":
+            reference_parts.append("CISA KEV")
         rows.append([
             str(index),
             Paragraph(severity.upper(), styles[f"Badge{severity.title()}"]),
@@ -599,6 +603,20 @@ def _finding_block(index: int, finding: dict[str, Any], target: str, styles) -> 
         metadata_rows.append([
             "CVE", _ascii_safe(finding.get("cve_id") or "Not supplied", 80),
             "CVSS", _ascii_safe(finding.get("cvss_score") if finding.get("cvss_score") is not None else "Not supplied", 40),
+        ])
+    if finding.get("exploit_priority"):
+        threat_context = []
+        if finding.get("kev_status") == "known_exploited":
+            threat_context.append("CISA KEV: known exploited")
+        elif finding.get("kev_status") == "not_listed":
+            threat_context.append("CISA KEV: not listed (not proof of safety)")
+        else:
+            threat_context.append("CISA KEV: unavailable")
+        if finding.get("epss_score") is not None:
+            threat_context.append(f"EPSS {float(finding['epss_score']):.2%}")
+        metadata_rows.append([
+            "Exploit priority", _ascii_safe(str(finding["exploit_priority"]).upper(), 40),
+            "Threat activity", _ascii_safe(" | ".join(threat_context), 240),
         ])
     if finding.get("owasp_category") or finding.get("attack_vector"):
         metadata_rows.append([
