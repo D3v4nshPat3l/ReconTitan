@@ -1,5 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   buildAttackSurfaceTree,
   createAttackSurfaceTree,
@@ -174,4 +176,14 @@ test('report tabs keep scan output separate and open the tree on demand', () => 
   assert.equal(outputView.hidden, false);
   assert.equal(surfaceView.hidden, true);
   assert.equal(outputButton.focused, true);
+});
+
+test('tree layout stacks nodes vertically without a horizontal canvas', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'report.css'), 'utf8');
+  const scrollRule = css.match(/\.surface-tree-scroll\s*\{[^}]+\}/s)?.[0] || '';
+  const listRule = css.match(/\.surface-tree-root,\s*\.surface-tree-children\s*\{[^}]+\}/s)?.[0] || '';
+  assert.match(scrollRule, /overflow-x:\s*hidden/);
+  assert.match(listRule, /flex-direction:\s*column/);
+  assert.match(listRule, /width:\s*100%/);
+  assert.doesNotMatch(listRule, /max-content/);
 });
