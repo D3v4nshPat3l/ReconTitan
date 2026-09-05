@@ -19,7 +19,12 @@ _SEVERITIES = ("critical", "high")
 
 
 def alert_counts(report: dict[str, Any]) -> dict[str, int]:
-    """Return triggering severity counts, normalising untrusted report data."""
+    """Return triggering severity and exploit-priority counts."""
+    findings = report.get("findings") or []
+    urgent = sum(
+        1 for finding in findings
+        if isinstance(finding, dict) and finding.get("exploit_priority") == "urgent"
+    )
     counts = report.get("severity_counts")
     # Queued scan records persist individual findings and derive their summary
     # only when a report is read. Local scans already carry severity_counts.
@@ -28,13 +33,16 @@ def alert_counts(report: dict[str, Any]) -> dict[str, int]:
     if not counts:
         counts = {
             severity: sum(
-                1 for finding in (report.get("findings") or [])
+                1 for finding in findings
                 if str(finding.get("severity", "")).lower() == severity
             )
             for severity in _SEVERITIES
         }
     allowed = _SEVERITIES if settings.ALERT_MIN_SEVERITY == "high" else ("critical",)
-    normalised: dict[str, int] = {}
+    # Exploit-priority URGENT always triggers: it means a version-confirmed CVE
+    # is in CISA KEV, even when its older CVSS score sits below the configured
+    # severity threshold.
+    normalised: dict[str, int] = {"urgent": urgent}
     for severity in allowed:
         try:
             normalised[severity] = max(0, int(counts.get(severity, 0)))
@@ -46,13 +54,21 @@ def alert_counts(report: dict[str, Any]) -> dict[str, int]:
 def _message(report: dict[str, Any], counts: dict[str, int]) -> EmailMessage:
     target = str(report.get("target") or "unknown target").replace("\r", " ").replace("\n", " ")[:253]
     scan_id = str(report.get("scan_id") or "local scan")[:100]
-    total = sum(counts.values())
+    severity_total = sum(value for name, value in counts.items() if name != "urgent")
+    urgent_below_threshold = sum(
+        1 for finding in (report.get("findings") or [])
+        if isinstance(finding, dict)
+        and finding.get("exploit_priority") == "urgent"
+        and str(finding.get("severity", "")).lower() not in counts
+    )
+    total = severity_total + urgent_below_threshold
     finding_lines = []
     for finding in (report.get("findings") or []):
         severity = str(finding.get("severity", "")).lower()
-        if severity in counts and counts[severity]:
+        urgent = finding.get("exploit_priority") == "urgent"
+        if urgent or (severity in counts and counts[severity]):
             title = str(finding.get("title") or "Untitled finding").replace("\r", " ").replace("\n", " ")[:300]
-            finding_lines.append(f"- {severity.upper()}: {title}")
+            finding_lines.append(f"- {'URGENT / ' if urgent else ''}{severity.upper()}: {title}")
             if len(finding_lines) == 10:
                 break
 
