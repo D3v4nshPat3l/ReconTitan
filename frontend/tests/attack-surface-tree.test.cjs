@@ -151,22 +151,32 @@ test('down and up keyboard arrows follow the top-to-bottom hierarchy', () => {
   assert.equal(childList.children[0].children[0].focused, true);
 });
 
-test('report tabs keep scan output separate and open the tree on demand', () => {
+test('report tabs keep scan output separate and open other views on demand', () => {
+  // The switcher reads whatever buttons the markup declares rather than a
+  // fixed pair, so a third view is a markup change and nothing more. The stub
+  // therefore has to answer querySelectorAll the way a real root would.
   const outputButton = new Element();
   const surfaceButton = new Element();
+  const pathsButton = new Element();
+  outputButton.dataset = { reportView: 'output' };
+  surfaceButton.dataset = { reportView: 'surface' };
+  pathsButton.dataset = { reportView: 'paths' };
+
   const tabsRoot = new Element();
-  tabsRoot.querySelector = selector => ({
-    '[data-report-view="output"]': outputButton,
-    '[data-report-view="surface"]': surfaceButton,
-  })[selector];
+  tabsRoot.querySelectorAll = () => [outputButton, surfaceButton, pathsButton];
+
   const outputView = new Element();
   const surfaceView = new Element();
-  const tabs = createReportViewTabs(tabsRoot, outputView, surfaceView);
+  const pathsView = new Element();
+  const tabs = createReportViewTabs(tabsRoot, {
+    output: outputView, surface: surfaceView, paths: pathsView,
+  });
 
   tabs.show('output');
   assert.equal(tabsRoot.hidden, false);
   assert.equal(outputView.hidden, false);
   assert.equal(surfaceView.hidden, true);
+  assert.equal(pathsView.hidden, true);
   assert.equal(outputButton.getAttribute('aria-selected'), 'true');
 
   surfaceButton.fire('click');
@@ -174,10 +184,44 @@ test('report tabs keep scan output separate and open the tree on demand', () => 
   assert.equal(surfaceView.hidden, false);
   assert.equal(surfaceButton.getAttribute('aria-selected'), 'true');
 
-  surfaceButton.fire('keydown', { key: 'ArrowLeft' });
-  assert.equal(outputView.hidden, false);
+  pathsButton.fire('click');
+  assert.equal(pathsView.hidden, false);
   assert.equal(surfaceView.hidden, true);
+
+  // Arrows wrap around the declared order instead of jumping to a fixed end.
+  pathsButton.fire('keydown', { key: 'ArrowLeft' });
+  assert.equal(surfaceView.hidden, false);
+  assert.equal(surfaceButton.focused, true);
+
+  surfaceButton.fire('keydown', { key: 'Home' });
+  assert.equal(outputView.hidden, false);
   assert.equal(outputButton.focused, true);
+});
+
+test('a view with nothing to show hides its tab instead of offering an empty one', () => {
+  const outputButton = new Element();
+  const pathsButton = new Element();
+  outputButton.dataset = { reportView: 'output' };
+  pathsButton.dataset = { reportView: 'paths' };
+  const tabsRoot = new Element();
+  tabsRoot.querySelectorAll = () => [outputButton, pathsButton];
+  const outputView = new Element();
+  const pathsView = new Element();
+  const tabs = createReportViewTabs(tabsRoot, { output: outputView, paths: pathsView });
+
+  tabs.setAvailable('paths', false);
+  assert.equal(pathsButton.hidden, true);
+
+  tabs.setAvailable('paths', true);
+  assert.equal(pathsButton.hidden, false);
+
+  // Hiding the tab the reader is currently on must not strand them on a
+  // blank view; it falls back to the first declared one.
+  tabs.show('paths');
+  assert.equal(pathsView.hidden, false);
+  tabs.setAvailable('paths', false);
+  assert.equal(pathsView.hidden, true);
+  assert.equal(outputView.hidden, false);
 });
 
 test('tree layout stacks nodes vertically without a horizontal canvas', () => {

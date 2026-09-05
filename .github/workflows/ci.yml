@@ -39,6 +39,7 @@ jobs:
           node --check frontend/report.js
           node --check frontend/findings-explorer.js
           node --check frontend/attack-surface-tree.js
+          node --check frontend/attack-paths.js
           node --check frontend/scan-progress.js
           node --test frontend/tests/*.test.cjs
           bash -n deploy.sh
