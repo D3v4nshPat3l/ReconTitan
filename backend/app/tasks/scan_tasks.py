@@ -401,6 +401,21 @@ def _to_finding(raw: dict) -> dict:
         value = raw.get(key)
         if value:
             finding[key] = str(value)[:limit]
+    for key, limit in (
+        ("kev_status", 40), ("kev_date_added", 20), ("kev_due_date", 20),
+        ("kev_required_action", 2_000), ("kev_ransomware_use", 80),
+        ("exploit_priority", 40),
+    ):
+        value = raw.get(key)
+        if value:
+            finding[key] = str(value)[:limit]
+    for key in ("epss_score", "epss_percentile"):
+        value = raw.get(key)
+        if isinstance(value, (int, float)) and 0 <= value <= 1:
+            finding[key] = float(value)
+    reasons = raw.get("priority_reasons")
+    if isinstance(reasons, list):
+        finding["priority_reasons"] = [str(reason)[:500] for reason in reasons[:12]]
     return finding
 
 
