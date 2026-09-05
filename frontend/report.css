@@ -1281,3 +1281,93 @@ button { cursor: pointer; background: none; border: none; }
   .attack-paths-view { margin: 0 .75rem 1rem; padding: 1rem; }
   .attack-path-head { flex-direction: column; gap: .5rem; }
 }
+
+/* ── Triage ─────────────────────────────────────────────────────────────────
+   Reviewing a finding, and recording what was decided.
+
+   The visual job here is the opposite of most UI: this must not feel
+   frictionless. Suppressing a finding is a claim, and the reason field, the
+   always-visible summary banner and the reveal toggle exist so that claim
+   stays attributable. Nothing in here should read as "dismiss". */
+.triage-block { border-top: 1px solid var(--line-soft); padding-top: .9rem; }
+.triage-hint {
+  margin: .3rem 0 .7rem;
+  max-width: 68ch;
+  font-size: .78rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.triage-states { display: flex; flex-wrap: wrap; gap: .4rem; }
+.triage-btn {
+  padding: .4rem .7rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: .78rem;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.triage-btn:hover { border-color: var(--faint); color: var(--text); }
+.triage-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.triage-btn.is-selected { border-color: var(--accent); color: var(--text); background: var(--accent-wash); }
+/* The two that hide something are marked as such even before selection. */
+.triage-btn[data-triage-state="false_positive"].is-selected,
+.triage-btn[data-triage-state="accepted_risk"].is-selected { border-color: var(--medium); }
+
+.triage-reason-label { display: block; margin-top: .7rem; }
+.triage-reason-label > span { display: block; font-size: .76rem; color: var(--muted); margin-bottom: .25rem; }
+.triage-reason-label em { color: var(--medium); font-style: normal; }
+.triage-reason-label textarea {
+  width: 100%;
+  padding: .5rem .6rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: .82rem;
+  resize: vertical;
+}
+.triage-reason-label textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.triage-actions { display: flex; align-items: center; gap: .7rem; margin-top: .7rem; flex-wrap: wrap; }
+.triage-status { font-size: .76rem; color: var(--muted); }
+.triage-status.is-error { color: var(--high); }
+.triage-status.is-ok { color: var(--ok); }
+.triage-current {
+  margin-top: .5rem;
+  font-size: .76rem;
+  line-height: 1.5;
+  color: var(--faint);
+  max-width: 68ch;
+}
+
+/* The banner. Present whenever anything is suppressed or confirmed, so a
+   quiet report always says why it is quiet. */
+.triage-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 1.5rem 0;
+  padding: .7rem .9rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--medium);
+  background: var(--surface);
+}
+.triage-summary-text { font-size: .82rem; line-height: 1.55; color: var(--text); max-width: 88ch; }
+.triage-summary-text strong { font-weight: 600; }
+.triage-summary-text span { color: var(--muted); }
+
+/* A suppressed finding is hidden from the default view but never removed.
+   Revealed, it is dimmed and struck rather than restyled as normal, so it
+   cannot be mistaken for something still counted. */
+body.has-suppressed .is-suppressed { display: none; }
+body.show-suppressed .is-suppressed { display: revert; opacity: .55; }
+body.show-suppressed .is-suppressed .finding-title,
+body.show-suppressed .is-suppressed .kv-key { text-decoration: line-through; }
+
+@media (max-width: 700px) {
+  .triage-summary { margin: 1rem .75rem 0; }
+  .triage-states { gap: .3rem; }
+  .triage-btn { flex: 1 1 auto; }
+}

@@ -23,6 +23,10 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const safeUrl = value => { try { const u = new URL(String(value||''), window.location.origin); return ['http:','https:'].includes(u.protocol) ? u.href : '#'; } catch (_) { return '#'; } };
 let findingRegistry = [];
+// The attack paths exactly as the scan produced them. Triage filters a view
+// of this rather than editing it, so a reversed decision restores the path.
+let basePaths = [];
+let basePathsFor = null;
 const findingsExplorer = createFindingsExplorer($('findingsExplorer'), finding => window.openModal(finding));
 const attackSurfaceTree = createAttackSurfaceTree($('attackSurfaceTree'), finding => window.openModal(finding));
 // Steps carry a finding id rather than the finding itself, so the paths view
@@ -33,6 +37,23 @@ const attackPathsView = createAttackPathsView($('attackPathsView'), {
     if (finding) window.openModal(finding);
   },
 });
+const triageControl = createTriageControl({
+  block: $('modalTriageBlock'),
+  buttons: Array.from(document.querySelectorAll('[data-triage-state]')),
+  reasonWrap: $('modalTriageReasonWrap'),
+  reasonInput: $('modalTriageReason'),
+  saveButton: $('modalTriageSave'),
+  status: $('modalTriageStatus'),
+  current: $('modalTriageCurrent'),
+}, { onSave: saveTriageDecision });
+
+const triageSummary = createTriageSummary({
+  root: $('triageSummary'),
+  count: $('triageSummaryCount'),
+  detail: $('triageSummaryDetail'),
+  toggle: $('triageSummaryToggle'),
+});
+
 const reportViewTabs = createReportViewTabs($('reportViewTabs'), {
   output: $('scanOutputView'),
   surface: $('attackSurfaceTree'),
@@ -930,8 +951,35 @@ function renderReport(data) {
   attackSurfaceTree.update(data);
   // The tab is hidden unless the scan actually produced chains, so a report
   // with nothing to correlate does not advertise an empty view.
-  const pathState = attackPathsView.update(data);
+  // Attack paths are correlated server-side from the findings as they were at
+  // scan time. Suppressing a finding afterwards has to drop the paths it
+  // anchored, or the report claims a route through something the reviewer has
+  // already dismissed. The unfiltered list is kept so un-suppressing restores
+  // the path rather than needing a fresh scan.
+  if (basePathsFor !== data) {
+    basePathsFor = data;
+    basePaths = Array.isArray(data.attack_paths) ? data.attack_paths : [];
+  }
+  const suppressedIds = new Set(
+    currentFindings.filter(isSuppressed).map(f => f.id).filter(Boolean));
+  const visiblePaths = basePaths.filter(path => {
+    const sources = (path.source_finding_ids || []).filter(Boolean);
+    // A path with no recorded source cannot be attributed to a decision, so
+    // it stays. Dropping it would hide a chain nobody chose to dismiss.
+    if (!sources.length) return true;
+    return !sources.every(id => suppressedIds.has(id));
+  });
+
+  const pathState = attackPathsView.update({ ...data, attack_paths: visiblePaths });
   reportViewTabs.setAvailable('paths', pathState.count > 0);
+
+  // Suppression is stated out loud whenever anything is suppressed. The
+  // toggle reveals the findings rather than un-suppressing them: a reader
+  // must always be able to see what a decision is hiding.
+  triageSummary.update(data, revealed => {
+    document.body.classList.toggle('show-suppressed', revealed);
+  });
+  document.body.classList.toggle('has-suppressed', (data.triage_summary || {}).suppressed_total > 0);
   reportViewTabs.show('output');
   currentTarget = data.target || '';
   findingRegistry = [];
@@ -1231,6 +1279,70 @@ $('reportGrid').addEventListener('click', event => {
 });
 
 // ── MODAL ──────────────────────────────────────────────────
+// Recording a decision changes what the report counts, so the page reloads the
+// scan rather than patching one number in place. Anything else drifts: the
+// severity bar, the attack paths and the summary all derive from it.
+async function saveTriageDecision(decision) {
+  const response = await apiFetch('/api/triage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: currentTarget, ...decision }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Could not save (HTTP ${response.status})`);
+  }
+  const saved = await response.json();
+
+  // Apply locally so the open modal and the banner agree with the server
+  // without a round trip through a whole new scan.
+  const finding = (currentFindings || []).find(
+    item => item && item.triage_fingerprint === decision.fingerprint);
+  if (finding) {
+    finding.triage = {
+      state: saved.state || decision.state,
+      reason: saved.reason || '',
+      author: saved.author || '',
+      decided_at: saved.decided_at || '',
+    };
+  }
+  recountAfterTriage();
+  return saved;
+}
+
+// Recompute everything that derives from the findings, so a decision is
+// reflected without re-running the scan.
+function recountAfterTriage() {
+  const data = window._scanData;
+  if (!data) return;
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const finding of currentFindings) {
+    if (isSuppressed(finding)) continue;
+    const severity = String(finding.severity || 'info').toLowerCase();
+    counts[severity in counts ? severity : 'info'] += 1;
+  }
+  const stateCounts = { open: 0, confirmed: 0, false_positive: 0, accepted_risk: 0 };
+  const suppressed = [];
+  for (const finding of currentFindings) {
+    const state = triageStateOf(finding);
+    stateCounts[state] += 1;
+    if (isSuppressed(finding)) {
+      suppressed.push({
+        title: finding.title || '', severity: finding.severity || 'info', state,
+        reason: (finding.triage && finding.triage.reason) || '',
+        fingerprint: finding.triage_fingerprint || '',
+      });
+    }
+  }
+  data.severity_counts = counts;
+  data.total_findings = Object.values(counts).reduce((a, b) => a + b, 0);
+  data.triage_summary = {
+    counts: stateCounts, suppressed_total: suppressed.length, suppressed,
+  };
+  sessionStorage.setItem('rt_scan_data', JSON.stringify(data));
+  renderReport(data);
+}
+
 window.openModal = function(f) {
   if (typeof f === 'string') f = JSON.parse(f);
   window._modalFinding = f;
@@ -1243,6 +1355,7 @@ window.openModal = function(f) {
   $('modalTool').textContent   = f.tool||'';
   $('modalCat').textContent    = f.category||'';
   $('modalRemBlock').style.display = f.remediation ? 'block' : 'none';
+  triageControl.open(f);
   if (f.remediation) $('modalRem').textContent = f.remediation;
 
   // Exploitation proof panel, shown only when the scanner actually proved it.
