@@ -22,11 +22,13 @@
     if (!enabled()) return false;
     const critical = count(report, 'critical');
     const high = count(report, 'high');
-    if (!critical && !high) return false;
+    const urgent = (report.findings || []).filter(f => f && f.exploit_priority === 'urgent').length;
+    if (!urgent && !critical && !high) return false;
     const key = `rt_desktop_alerted_${report.scan_id || `${report.target || 'unknown'}_${report.total_time_seconds || 0}`}`;
     if (sessionStorage.getItem(key)) return false;
     sessionStorage.setItem(key, '1');
     const parts = [];
+    if (urgent) parts.push(`${urgent} urgent exploit-priority`);
     if (critical) parts.push(`${critical} critical`);
     if (high) parts.push(`${high} high`);
     try {

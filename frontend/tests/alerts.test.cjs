@@ -47,3 +47,14 @@ test('unsupported notification APIs cannot be enabled', async () => {
   assert.match((await alerts.setEnabled(true)).reason, /unavailable/);
   global.Notification = saved;
 });
+
+test('urgent exploit-priority CVEs alert even below high severity', async () => {
+  Notification.permission = 'granted';
+  await alerts.setEnabled(true);
+  const report = {
+    scan_id: 'scan_kev', target: 'example.com', severity_counts: { low: 1 },
+    findings: [{ severity: 'low', exploit_priority: 'urgent' }],
+  };
+  assert.equal(alerts.notify(report), true);
+  assert.match(notices[0].options.body, /1 urgent exploit-priority/);
+});
