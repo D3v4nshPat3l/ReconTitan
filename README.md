@@ -93,6 +93,7 @@ Point it at a domain and it will:
 - **Map the attack surface** — WHOIS, DNS, certificate transparency, archived URLs, subdomains, live hosts, open ports, hosting attribution
 - **Analyse what it found** — TLS, security headers, cookie flags, CORS, technology fingerprints, JavaScript inventory, WAF detection, subdomain-takeover exposure
 - **Match known weaknesses** — CVE candidates by CPE version range, OWASP Top 10 categorisation
+- **Prioritise real-world exploit risk** — CISA KEV status and FIRST EPSS probability rank version-confirmed CVEs without confusing exploit activity with CVSS severity
 - **Optionally simulate an attacker** — bounded, paced, explicitly authorised active probes
 - **Write it up** — an interactive report plus PDF, JSON and HTML export
 
@@ -115,6 +116,10 @@ A real `full` scan of `example.com` — **25 modules, 34 findings, 64 seconds.**
 </div>
 
 Every card is a module. Notice what an honest scanner looks like: a check that could not run says so and names its fallback rather than reporting nothing. **Subdomains** found 9 and lists them. **HTTP Security** marks five headers `Missing` with a link to analyse each. A tool that never says *"I couldn't check this"* is a tool you cannot trust.
+
+The **Vulnerabilities** card is exploit-aware. Version-confirmed CVEs are ordered by an operational priority: `URGENT` for entries in CISA's Known Exploited Vulnerabilities catalogue, then `HIGH` or `ELEVATED` when EPSS likelihood/percentile or CVSS warrants faster attention. Product-only and keyword matches always remain `VERIFY`, even when the CVE is widely exploited, because threat activity does not prove that the detected installation is affected. Opening a finding shows the KEV result, EPSS probability, percentile, and the exact reasons behind its priority; the same fields are preserved in JSON and PDF exports.
+
+This enrichment is fail-soft. If CISA or FIRST is unreachable, the scan still completes and labels the missing status as unavailable instead of falsely saying the CVE is not exploited. Results are cached for six hours by default. An `URGENT` CVE also triggers the existing email and desktop alerts even when its base CVSS severity is below `high`. Only CVE identifiers are sent to FIRST; the target hostname, IP, and evidence are never submitted. Set `EXPLOIT_INTEL_ENABLED=false` to disable the network enrichment, or tune `EXPLOIT_INTEL_TIMEOUT_SECONDS` and `EXPLOIT_INTEL_CACHE_TTL_SECONDS` in `.env`.
 
 The report also has a separate **Attack surface** tab inspired by the animated node-link navigation of OSINT Framework. The normal **Scan output** remains the default and keeps its original position. In the second tab, selecting a compact circular node grows its connected branch downward with a smooth enter/update transition; collapsing it retracts that branch. Children remain in one width-bounded vertical tree instead of spreading into horizontal cards, and the canvas stays within the report width. The hierarchy covers subdomains, IP addresses, open services, technologies, web input points, severity-grouped findings, and scanner coverage. Finding leaves open the existing evidence modal, and the tree never launches extra probes.
 
