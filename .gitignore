@@ -85,3 +85,7 @@ admin_token.txt
 # filesystem paths, and with a broad --script selector they can also capture
 # the scanning machine's own network. Never commit them.
 scans/
+
+# Triage decisions. Holds target hostnames and whatever reviewers wrote about
+# them, which is operational data about somebody's infrastructure.
+triage.json
