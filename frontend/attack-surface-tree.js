@@ -370,38 +370,57 @@ function createAttackSurfaceTree(root, onOpenFinding) {
   };
 }
 
-function createReportViewTabs(root, outputView, surfaceView) {
-  const outputButton = root.querySelector('[data-report-view="output"]');
-  const surfaceButton = root.querySelector('[data-report-view="surface"]');
-  const buttons = { output: outputButton, surface: surfaceButton };
+function createReportViewTabs(root, views) {
+  // Driven by whatever buttons the markup declares, rather than a fixed pair.
+  // Adding a tab is then a markup change plus a view element, which is how the
+  // attack-paths view was added without touching the switching logic.
+  const buttons = {};
+  for (const button of root.querySelectorAll('[data-report-view]')) {
+    const name = button.dataset.reportView;
+    if (views[name]) buttons[name] = button;
+  }
+  const order = Object.keys(buttons);
+  const fallback = order[0];
 
   function show(view, focus = false) {
-    const selected = view === 'surface' ? 'surface' : 'output';
-    outputView.hidden = selected !== 'output';
-    surfaceView.hidden = selected !== 'surface';
+    const selected = buttons[view] ? view : fallback;
+    for (const [name, element] of Object.entries(views)) {
+      if (element) element.hidden = name !== selected;
+    }
     for (const [name, button] of Object.entries(buttons)) {
       button.setAttribute('aria-selected', String(name === selected));
       button.setAttribute('tabindex', name === selected ? '0' : '-1');
     }
     root.hidden = false;
-    if (focus && buttons[selected].focus) buttons[selected].focus();
+    if (focus && buttons[selected] && buttons[selected].focus) buttons[selected].focus();
   }
 
-  outputButton.addEventListener('click', () => show('output'));
-  surfaceButton.addEventListener('click', () => show('surface'));
-  for (const [name, button] of Object.entries(buttons)) {
+  order.forEach((name, index) => {
+    const button = buttons[name];
+    button.addEventListener('click', () => show(name));
     button.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
-      if (event.key === 'Home' || event.key === 'ArrowLeft') show('output', true);
-      else if (event.key === 'End' || event.key === 'ArrowRight') show('surface', true);
+      const next = event.key === 'Home' ? 0
+        : event.key === 'End' ? order.length - 1
+        : event.key === 'ArrowLeft' ? (index - 1 + order.length) % order.length
+        : (index + 1) % order.length;
+      show(order[next], true);
     });
     button.setAttribute('role', 'tab');
     button.setAttribute('data-view-name', name);
-  }
+  });
   root.setAttribute('role', 'tablist');
 
-  return { show };
+  // A tab whose view has no content is hidden rather than shown empty: a scan
+  // with no correlated paths should not advertise a tab that leads nowhere.
+  function setAvailable(name, available) {
+    if (!buttons[name]) return;
+    buttons[name].hidden = !available;
+    if (!available && buttons[name].getAttribute('aria-selected') === 'true') show(fallback);
+  }
+
+  return { show, setAvailable };
 }
 
 if (typeof module !== 'undefined' && module.exports) {

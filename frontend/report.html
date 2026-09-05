@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=32">
+<link rel="stylesheet" href="report.css?v=33">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
@@ -102,6 +102,7 @@
 <nav class="report-view-tabs" id="reportViewTabs" aria-label="Report views" hidden>
   <button type="button" data-report-view="output" aria-controls="scanOutputView" aria-selected="true">Scan output</button>
   <button type="button" data-report-view="surface" aria-controls="attackSurfaceTree" aria-selected="false">Attack surface</button>
+  <button type="button" data-report-view="paths" aria-controls="attackPathsView" aria-selected="false" hidden>Attack paths</button>
 </nav>
 
 <!-- DEFAULT SCAN-OUTPUT VIEW -->
@@ -148,6 +149,27 @@
   <div class="surface-tree-scroll">
     <ul class="surface-tree-root" data-tree role="tree" aria-label="External attack surface"></ul>
   </div>
+</section>
+
+<!-- DEDICATED ATTACK-PATHS VIEW -->
+<section class="attack-paths-view" id="attackPathsView" aria-labelledby="attackPathsTitle" hidden>
+  <div class="paths-head">
+    <p class="paths-eyebrow">Correlated from findings already gathered</p>
+    <h2 id="attackPathsTitle">Attack Paths</h2>
+    <p class="paths-intro">
+      How the findings connect: where an attacker reaches this target, what they pass
+      through, and what the scanner actually proved at each step. Nothing here is a new
+      probe &mdash; these chains are joined from evidence the scan already collected.
+    </p>
+    <p class="paths-caution">
+      Read the labels on each step. A chain of confirmed observations that ends in a
+      <em>possible</em> technique is a route worth closing, not a compromised host.
+      &ldquo;Exploited in the wild&rdquo; describes the vulnerability, never this target.
+    </p>
+  </div>
+  <p class="paths-summary" data-paths-summary role="status"></p>
+  <p class="paths-legend" data-paths-legend></p>
+  <div class="paths-list" data-paths-list></div>
 </section>
 
 <!-- EMPTY STATE -->
@@ -237,10 +259,11 @@
 </div>
 
 <script src="findings-explorer.js?v=1"></script>
-<script src="attack-surface-tree.js?v=2"></script>
+<script src="attack-surface-tree.js?v=3"></script>
+<script src="attack-paths.js?v=1"></script>
 <script src="scan-progress.js?v=1"></script>
 <script src="alerts.js?v=1"></script>
-<script src="report.js?v=32"></script>
+<script src="report.js?v=33"></script>
 <script src="globe.js?v=3" defer></script>
 </body>
 </html>

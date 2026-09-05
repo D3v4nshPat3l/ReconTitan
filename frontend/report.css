@@ -1123,3 +1123,161 @@ button { cursor: pointer; background: none; border: none; }
 /* The primary action keeps accent-on-ink, which reads on either ground. */
 .tb-btn.primary,
 .tb-btn.primary:hover { color: #0d0d0d; }
+
+/* ── Attack paths view ──────────────────────────────────────────────────────
+   Shares the surface tree's container so the three tabs read as one object.
+   The one thing this view must never do is let severity colour drown out the
+   evidence level: a critical-toned path whose last step is "possible" is a
+   route to close, not a breach. Level is therefore a text label first, and
+   colour only reinforces it. */
+.attack-paths-view {
+  margin: 0 1.5rem 1.5rem;
+  padding: 1.35rem;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: var(--surface);
+}
+.paths-head { padding-bottom: 1rem; border-bottom: 1px solid var(--line-soft); }
+.paths-eyebrow {
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.paths-head h2 {
+  font-family: var(--serif);
+  font-size: clamp(1.55rem, 2.5vw, 2rem);
+  font-weight: 400;
+  line-height: 1.15;
+}
+.paths-intro, .paths-caution {
+  max-width: 720px;
+  margin-top: .35rem;
+  font-size: .88rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.paths-caution {
+  margin-top: .7rem;
+  padding: .55rem .75rem;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-wash);
+  color: var(--text);
+}
+.paths-summary, .paths-legend {
+  margin-top: .9rem;
+  font-family: var(--mono);
+  font-size: .74rem;
+  color: var(--muted);
+}
+.paths-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.paths-list { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.1rem; }
+
+.attack-path { border: 1px solid var(--line); border-left: 3px solid var(--info); background: var(--bg); padding: 1rem 1.1rem; }
+.attack-path.tone-critical { border-left-color: var(--critical); }
+.attack-path.tone-high     { border-left-color: var(--high); }
+.attack-path.tone-medium   { border-left-color: var(--medium); }
+.attack-path.tone-low      { border-left-color: var(--low); }
+.attack-path.tone-info     { border-left-color: var(--ok); }
+
+.attack-path-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.attack-path-head h3 { font-family: var(--serif); font-size: 1.2rem; font-weight: 400; line-height: 1.25; }
+.attack-path-type { font-family: var(--mono); font-size: .72rem; color: var(--faint); margin-top: .2rem; }
+.attack-path-badges { display: flex; gap: .4rem; flex-wrap: wrap; }
+.path-status, .path-sev {
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .2rem .45rem;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.path-status.tone-critical { color: var(--critical); }
+.path-status.tone-high     { color: var(--high); }
+.path-status.tone-medium   { color: var(--medium); }
+.path-status.tone-low      { color: var(--low); }
+.path-status.tone-info     { color: var(--ok); }
+.path-sev.sev-critical { color: var(--critical); }
+.path-sev.sev-high     { color: var(--high); }
+.path-sev.sev-medium   { color: var(--medium); }
+.path-sev.sev-low      { color: var(--low); }
+.path-sev.sev-info     { color: var(--info); }
+.attack-path-note { margin-top: .5rem; font-size: .8rem; color: var(--muted); max-width: 70ch; }
+
+/* The chain itself. Steps are numbered because order is the information. */
+.path-steps { list-style: none; margin: .9rem 0 0; padding: 0; }
+.path-step { position: relative; display: flex; gap: .7rem; padding: .55rem 0 .55rem 0; }
+.path-step-marker {
+  flex: 0 0 1.4rem;
+  height: 1.4rem;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: .68rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+.path-step.level-confirmed .path-step-marker { border-color: var(--ok); color: var(--ok); }
+.path-step.level-supported .path-step-marker { border-color: var(--medium); color: var(--medium); }
+.path-step.level-possible  .path-step-marker { border-color: var(--faint); color: var(--faint); border-style: dashed; }
+.path-connector {
+  position: absolute;
+  left: .7rem;
+  top: 2rem;
+  bottom: -.55rem;
+  width: 1px;
+  background: var(--line);
+}
+.path-step.level-possible .path-connector { background: repeating-linear-gradient(to bottom, var(--line) 0 3px, transparent 3px 6px); }
+.path-step-body { min-width: 0; flex: 1; }
+.path-step-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.path-step-role { font-family: var(--mono); font-size: .64rem; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+.path-level {
+  font-family: var(--mono);
+  font-size: .6rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .1rem .35rem;
+  border: 1px solid currentColor;
+}
+.path-level.level-confirmed { color: var(--ok); }
+.path-level.level-supported { color: var(--medium); }
+.path-level.level-possible  { color: var(--faint); border-style: dashed; }
+.path-step-label { font-family: var(--mono); font-size: .82rem; color: var(--text); margin-top: .15rem; word-break: break-word; }
+.path-step-detail { font-size: .78rem; line-height: 1.55; color: var(--muted); margin-top: .2rem; max-width: 74ch; }
+.path-step.is-clickable { cursor: pointer; }
+.path-step.is-clickable:hover .path-step-label { color: var(--accent); }
+.path-step.is-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.attack-path-chain {
+  margin-top: .8rem;
+  padding: .45rem .65rem;
+  font-size: .78rem;
+  border-left: 2px solid var(--faint);
+  background: var(--surface-2);
+  color: var(--text);
+  max-width: 74ch;
+}
+.attack-path-chain.level-confirmed { border-left-color: var(--ok); }
+.attack-path-chain.level-supported { border-left-color: var(--medium); }
+.attack-path-chain.level-possible  { border-left-color: var(--faint); }
+
+.attack-path-block { margin-top: .8rem; }
+.attack-path-lbl {
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: .25rem;
+}
+.path-impacts { margin: 0; padding-left: 1.1rem; font-size: .8rem; line-height: 1.6; color: var(--text); }
+.path-remediation { font-size: .8rem; line-height: 1.6; color: var(--text); max-width: 74ch; }
+
+@media (max-width: 700px) {
+  .attack-paths-view { margin: 0 .75rem 1rem; padding: 1rem; }
+  .attack-path-head { flex-direction: column; gap: .5rem; }
+}

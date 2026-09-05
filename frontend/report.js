@@ -25,7 +25,19 @@ const safeUrl = value => { try { const u = new URL(String(value||''), window.loc
 let findingRegistry = [];
 const findingsExplorer = createFindingsExplorer($('findingsExplorer'), finding => window.openModal(finding));
 const attackSurfaceTree = createAttackSurfaceTree($('attackSurfaceTree'), finding => window.openModal(finding));
-const reportViewTabs = createReportViewTabs($('reportViewTabs'), $('scanOutputView'), $('attackSurfaceTree'));
+// Steps carry a finding id rather than the finding itself, so the paths view
+// resolves it against the report it was rendered from.
+const attackPathsView = createAttackPathsView($('attackPathsView'), {
+  onOpenFinding: id => {
+    const finding = (currentFindings || []).find(item => item && item.id === id);
+    if (finding) window.openModal(finding);
+  },
+});
+const reportViewTabs = createReportViewTabs($('reportViewTabs'), {
+  output: $('scanOutputView'),
+  surface: $('attackSurfaceTree'),
+  paths: $('attackPathsView'),
+});
 const findingRef = finding => { const index = findingRegistry.push(finding) - 1; return `data-finding-index="${index}"`; };
 
 // ── UTILS ──────────────────────────────────────────────────
@@ -916,6 +928,10 @@ function renderReport(data) {
   currentFindings = findings;
   findingsExplorer.update(findings);
   attackSurfaceTree.update(data);
+  // The tab is hidden unless the scan actually produced chains, so a report
+  // with nothing to correlate does not advertise an empty view.
+  const pathState = attackPathsView.update(data);
+  reportViewTabs.setAvailable('paths', pathState.count > 0);
   reportViewTabs.show('output');
   currentTarget = data.target || '';
   findingRegistry = [];
