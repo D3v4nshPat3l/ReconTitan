@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   buildAttackSurfaceTree,
   createAttackSurfaceTree,
+  createReportViewTabs,
   cleanHost,
   isAddress,
 } = require('../attack-surface-tree.js');
@@ -133,15 +134,44 @@ test('controller expands downward, collapses branches, and opens finding evidenc
   assert.equal(ui.opened(), report.findings[4]);
 });
 
-test('keyboard arrows open a branch and move to its first child', () => {
+test('down and up keyboard arrows follow the top-to-bottom hierarchy', () => {
   const ui = setup();
   ui.controller.update(report);
   const nodes = flattenElements(ui.elements.tree);
   const groupRow = nodes.find(item => item.className.includes('surface-tree-group'));
   const button = groupRow.children[0];
-  button.fire('keydown', { key: 'ArrowRight' });
+  button.fire('keydown', { key: 'ArrowDown' });
   assert.equal(groupRow.getAttribute('aria-expanded'), 'true');
-  button.fire('keydown', { key: 'ArrowRight' });
+  button.fire('keydown', { key: 'ArrowDown' });
   const childList = groupRow.children[1];
   assert.equal(childList.children[0].children[0].focused, true);
+});
+
+test('report tabs keep scan output separate and open the tree on demand', () => {
+  const outputButton = new Element();
+  const surfaceButton = new Element();
+  const tabsRoot = new Element();
+  tabsRoot.querySelector = selector => ({
+    '[data-report-view="output"]': outputButton,
+    '[data-report-view="surface"]': surfaceButton,
+  })[selector];
+  const outputView = new Element();
+  const surfaceView = new Element();
+  const tabs = createReportViewTabs(tabsRoot, outputView, surfaceView);
+
+  tabs.show('output');
+  assert.equal(tabsRoot.hidden, false);
+  assert.equal(outputView.hidden, false);
+  assert.equal(surfaceView.hidden, true);
+  assert.equal(outputButton.getAttribute('aria-selected'), 'true');
+
+  surfaceButton.fire('click');
+  assert.equal(outputView.hidden, true);
+  assert.equal(surfaceView.hidden, false);
+  assert.equal(surfaceButton.getAttribute('aria-selected'), 'true');
+
+  surfaceButton.fire('keydown', { key: 'ArrowLeft' });
+  assert.equal(outputView.hidden, false);
+  assert.equal(surfaceView.hidden, true);
+  assert.equal(outputButton.focused, true);
 });
