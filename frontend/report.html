@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=29">
+<link rel="stylesheet" href="report.css?v=30">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
@@ -98,19 +98,46 @@
   <div class="tool-pills" id="toolPills"></div>
 </div>
 
-<!-- DANGER MODE BANNER (rendered above the AI summary) -->
-<div id="dangerBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
+<!-- REPORT VIEW TABS -->
+<nav class="report-view-tabs" id="reportViewTabs" aria-label="Report views" hidden>
+  <button type="button" data-report-view="output" aria-controls="scanOutputView" aria-selected="true">Scan output</button>
+  <button type="button" data-report-view="surface" aria-controls="attackSurfaceTree" aria-selected="false">Attack surface</button>
+</nav>
 
-<!-- AI SUMMARY BANNER (rendered above masonry grid) -->
-<div id="aiBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
+<!-- DEFAULT SCAN-OUTPUT VIEW -->
+<div id="scanOutputView">
+  <!-- DANGER MODE BANNER (rendered above the AI summary) -->
+  <div id="dangerBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
 
-<!-- EXPANDABLE ATTACK-SURFACE TREE -->
+  <!-- AI SUMMARY BANNER (rendered above masonry grid) -->
+  <div id="aiBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
+
+  <!-- FINDINGS EXPLORER -->
+  <section class="findings-explorer" id="findingsExplorer" aria-labelledby="explorerTitle" hidden>
+    <h2 id="explorerTitle">Findings Explorer</h2>
+    <p>Search recorded evidence. Filters affect this list only; cards and exports retain the full report.</p>
+    <div class="explorer-controls">
+      <label>Search findings<input data-query type="search" placeholder="Title, evidence, CVE or asset"></label>
+      <label>Severity<select data-severity><option value="">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option></select></label>
+      <label>Scanner<select data-tool><option value="">All scanners</option></select></label>
+      <button data-clear type="button">Clear filters</button>
+    </div>
+    <p data-count role="status" aria-live="polite"></p>
+    <ul data-results></ul>
+    <div class="explorer-controls"><button data-previous type="button">Previous</button><button data-next type="button">Next</button></div>
+  </section>
+  <main class="report-grid" id="reportGrid" style="display:none">
+    <!-- Cards injected by JS -->
+  </main>
+</div>
+
+<!-- DEDICATED ATTACK-SURFACE VIEW -->
 <section class="attack-surface-tree" id="attackSurfaceTree" aria-labelledby="surfaceTreeTitle" hidden>
   <div class="surface-tree-head">
     <div>
       <p class="surface-tree-eyebrow">Interactive map</p>
       <h2 id="surfaceTreeTitle">Attack Surface Tree</h2>
-      <p>Select any branch to expand its children downward. Select a finding to open its full evidence.</p>
+      <p>Select a node to reveal its children below it. Select a finding to open its full evidence.</p>
     </div>
     <div class="surface-tree-actions" aria-label="Attack surface tree controls">
       <button data-expand-all type="button">Expand all</button>
@@ -122,24 +149,6 @@
     <ul class="surface-tree-root" data-tree role="tree" aria-label="External attack surface"></ul>
   </div>
 </section>
-
-<!-- MAIN REPORT GRID -->
-<section class="findings-explorer" id="findingsExplorer" aria-labelledby="explorerTitle" hidden>
-  <h2 id="explorerTitle">Findings Explorer</h2>
-  <p>Search recorded evidence. Filters affect this list only; cards and exports retain the full report.</p>
-  <div class="explorer-controls">
-    <label>Search findings<input data-query type="search" placeholder="Title, evidence, CVE or asset"></label>
-    <label>Severity<select data-severity><option value="">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option></select></label>
-    <label>Scanner<select data-tool><option value="">All scanners</option></select></label>
-    <button data-clear type="button">Clear filters</button>
-  </div>
-  <p data-count role="status" aria-live="polite"></p>
-  <ul data-results></ul>
-  <div class="explorer-controls"><button data-previous type="button">Previous</button><button data-next type="button">Next</button></div>
-</section>
-<main class="report-grid" id="reportGrid" style="display:none">
-  <!-- Cards injected by JS -->
-</main>
 
 <!-- EMPTY STATE -->
 <div class="empty-report" id="emptyReport" style="display:none">
@@ -224,10 +233,10 @@
 </div>
 
 <script src="findings-explorer.js?v=1"></script>
-<script src="attack-surface-tree.js?v=1"></script>
+<script src="attack-surface-tree.js?v=2"></script>
 <script src="scan-progress.js?v=1"></script>
 <script src="alerts.js?v=1"></script>
-<script src="report.js?v=30"></script>
+<script src="report.js?v=31"></script>
 <script src="globe.js?v=3" defer></script>
 </body>
 </html>

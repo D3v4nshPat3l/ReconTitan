@@ -25,6 +25,7 @@ const safeUrl = value => { try { const u = new URL(String(value||''), window.loc
 let findingRegistry = [];
 const findingsExplorer = createFindingsExplorer($('findingsExplorer'), finding => window.openModal(finding));
 const attackSurfaceTree = createAttackSurfaceTree($('attackSurfaceTree'), finding => window.openModal(finding));
+const reportViewTabs = createReportViewTabs($('reportViewTabs'), $('scanOutputView'), $('attackSurfaceTree'));
 const findingRef = finding => { const index = findingRegistry.push(finding) - 1; return `data-finding-index="${index}"`; };
 
 // ── UTILS ──────────────────────────────────────────────────
@@ -897,6 +898,7 @@ function renderReport(data) {
   currentFindings = findings;
   findingsExplorer.update(findings);
   attackSurfaceTree.update(data);
+  reportViewTabs.show('output');
   currentTarget = data.target || '';
   findingRegistry = [];
   const sc = data.severity_counts || {};

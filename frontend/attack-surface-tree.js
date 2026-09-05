@@ -5,7 +5,7 @@ const ATTACK_SURFACE_LIMITS = Object.freeze({
   addresses: 100,
   services: 200,
   technologies: 100,
-  findings: 300,
+  findings: 50,
   inputPoints: 200,
 });
 
@@ -326,11 +326,11 @@ function createAttackSurfaceTree(root, onOpenFinding) {
       branches.push(branch);
       button.addEventListener('click', () => branch.setOpen(!branch.isOpen()));
       button.addEventListener('keydown', event => {
-        if (event.key === 'ArrowRight') {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
           event.preventDefault();
           if (!branch.isOpen()) branch.setOpen(true);
           else if (childButtons[0] && childButtons[0].focus) childButtons[0].focus();
-        } else if (event.key === 'ArrowLeft') {
+        } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
           event.preventDefault();
           if (branch.isOpen()) branch.setOpen(false);
           else if (parentButton && parentButton.focus) parentButton.focus();
@@ -362,10 +362,45 @@ function createAttackSurfaceTree(root, onOpenFinding) {
   };
 }
 
+function createReportViewTabs(root, outputView, surfaceView) {
+  const outputButton = root.querySelector('[data-report-view="output"]');
+  const surfaceButton = root.querySelector('[data-report-view="surface"]');
+  const buttons = { output: outputButton, surface: surfaceButton };
+
+  function show(view, focus = false) {
+    const selected = view === 'surface' ? 'surface' : 'output';
+    outputView.hidden = selected !== 'output';
+    surfaceView.hidden = selected !== 'surface';
+    for (const [name, button] of Object.entries(buttons)) {
+      button.setAttribute('aria-selected', String(name === selected));
+      button.setAttribute('tabindex', name === selected ? '0' : '-1');
+    }
+    root.hidden = false;
+    if (focus && buttons[selected].focus) buttons[selected].focus();
+  }
+
+  outputButton.addEventListener('click', () => show('output'));
+  surfaceButton.addEventListener('click', () => show('surface'));
+  for (const [name, button] of Object.entries(buttons)) {
+    button.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === 'Home' || event.key === 'ArrowLeft') show('output', true);
+      else if (event.key === 'End' || event.key === 'ArrowRight') show('surface', true);
+    });
+    button.setAttribute('role', 'tab');
+    button.setAttribute('data-view-name', name);
+  }
+  root.setAttribute('role', 'tablist');
+
+  return { show };
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     buildAttackSurfaceTree,
     createAttackSurfaceTree,
+    createReportViewTabs,
     cleanHost,
     isAddress,
   };
