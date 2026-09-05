@@ -16,7 +16,7 @@ All notable ReconTitan changes are documented here.
 
 ### Added
 
-- Expandable Attack Surface Tree in the interactive report, built from saved scan evidence. It maps in-scope subdomains, IP addresses, open services, technologies, Danger Mode input points, severity-grouped findings, and scanner coverage; branches expand downward and finding leaves open their evidence modal.
+- Separate Attack surface report tab with an OSINT Framework-style expandable hierarchy rotated top-to-bottom. The normal Scan output remains the default and no longer shifts below the tree. The tree is built from saved scan evidence and maps in-scope subdomains, IP addresses, open services, technologies, Danger Mode input points, severity-grouped findings, and scanner coverage; finding leaves open their evidence modal.
 - Keyboard-accessible tree navigation, expand/collapse-all controls, bounded node counts, untrusted-text-safe rendering, and frontend regression tests for parsing and interaction.
 - Opt-in desktop notifications for high/critical scan findings, plus administrator-configured SMTP alerts. Email recipients are only accepted from server configuration, alerts include titles rather than evidence, and delivery errors never fail a scan.
 - Findings Explorer in the interactive report: case-insensitive multi-word search across recorded evidence, severity and scanner filters, severity ordering, and 25-result pagination. Results open the existing finding-detail modal and refresh after per-tool rescans. Filters do not change report cards or exports.
