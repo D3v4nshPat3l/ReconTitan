@@ -342,6 +342,15 @@ class Settings:
         # output of someone else's infrastructure is not something to leave on
         # disk by accident.
         self.NMAP_OUTPUT_DIR = _env_str("NMAP_OUTPUT_DIR", "")
+
+        # Where triage decisions live. A JSON file rather than a database,
+        # because this has to work in the mode the project actually runs in:
+        # no MongoDB, no Celery, one process on somebody's laptop. Empty
+        # means the default beside the project root.
+        #
+        # On a serverless host the filesystem is ephemeral, so decisions do
+        # not survive a cold start. Point this at a mounted volume there.
+        self.TRIAGE_STORE_PATH = _env_str("TRIAGE_STORE_PATH", "")
         self.SCAN_TIMEOUT_NUCLEI = _env_int("SCAN_TIMEOUT_NUCLEI", 600, minimum=1)
         self.SCAN_TIMEOUT_DEFAULT = _env_int("SCAN_TIMEOUT_DEFAULT", 120, minimum=1)
         self.JS_ANALYSIS_MAX_FILES = _env_int("JS_ANALYSIS_MAX_FILES", 20, minimum=1)
