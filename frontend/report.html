@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="report.css?v=28">
+<link rel="stylesheet" href="report.css?v=29">
 <link rel="stylesheet" href="news_extras.css?v=20">
 </head>
 <body>
@@ -103,6 +103,25 @@
 
 <!-- AI SUMMARY BANNER (rendered above masonry grid) -->
 <div id="aiBannerSlot" style="display:none; padding: 0 1.5rem;"></div>
+
+<!-- EXPANDABLE ATTACK-SURFACE TREE -->
+<section class="attack-surface-tree" id="attackSurfaceTree" aria-labelledby="surfaceTreeTitle" hidden>
+  <div class="surface-tree-head">
+    <div>
+      <p class="surface-tree-eyebrow">Interactive map</p>
+      <h2 id="surfaceTreeTitle">Attack Surface Tree</h2>
+      <p>Select any branch to expand its children downward. Select a finding to open its full evidence.</p>
+    </div>
+    <div class="surface-tree-actions" aria-label="Attack surface tree controls">
+      <button data-expand-all type="button">Expand all</button>
+      <button data-collapse-all type="button">Collapse all</button>
+    </div>
+  </div>
+  <p class="surface-tree-summary" data-summary role="status"></p>
+  <div class="surface-tree-scroll">
+    <ul class="surface-tree-root" data-tree role="tree" aria-label="External attack surface"></ul>
+  </div>
+</section>
 
 <!-- MAIN REPORT GRID -->
 <section class="findings-explorer" id="findingsExplorer" aria-labelledby="explorerTitle" hidden>
@@ -205,9 +224,10 @@
 </div>
 
 <script src="findings-explorer.js?v=1"></script>
+<script src="attack-surface-tree.js?v=1"></script>
 <script src="scan-progress.js?v=1"></script>
 <script src="alerts.js?v=1"></script>
-<script src="report.js?v=29"></script>
+<script src="report.js?v=30"></script>
 <script src="globe.js?v=3" defer></script>
 </body>
 </html>

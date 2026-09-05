@@ -24,6 +24,7 @@ const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 const safeUrl = value => { try { const u = new URL(String(value||''), window.location.origin); return ['http:','https:'].includes(u.protocol) ? u.href : '#'; } catch (_) { return '#'; } };
 let findingRegistry = [];
 const findingsExplorer = createFindingsExplorer($('findingsExplorer'), finding => window.openModal(finding));
+const attackSurfaceTree = createAttackSurfaceTree($('attackSurfaceTree'), finding => window.openModal(finding));
 const findingRef = finding => { const index = findingRegistry.push(finding) - 1; return `data-finding-index="${index}"`; };
 
 // ── UTILS ──────────────────────────────────────────────────
@@ -895,6 +896,7 @@ function renderReport(data) {
   // updated findings instead of re-running the whole scan.
   currentFindings = findings;
   findingsExplorer.update(findings);
+  attackSurfaceTree.update(data);
   currentTarget = data.target || '';
   findingRegistry = [];
   const sc = data.severity_counts || {};
