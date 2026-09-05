@@ -94,6 +94,7 @@ Point it at a domain and it will:
 - **Analyse what it found** — TLS, security headers, cookie flags, CORS, technology fingerprints, JavaScript inventory, WAF detection, subdomain-takeover exposure
 - **Match known weaknesses** — CVE candidates by CPE version range, OWASP Top 10 categorisation
 - **Prioritise real-world exploit risk** — CISA KEV status and FIRST EPSS probability rank version-confirmed CVEs without confusing exploit activity with CVSS severity
+- **Record what you decided** — mark a finding false positive, accepted risk or confirmed real, with a required reason; the decision is remembered and re-applied to later scans
 - **Correlate findings into attack paths** — join entry point, service, software, CVE and technique into one chain, labelling each link confirmed, supported or possible
 - **Optionally simulate an attacker** — bounded, paced, explicitly authorised active probes
 - **Write it up** — an interactive report plus PDF, JSON and HTML export
@@ -150,6 +151,30 @@ Four kinds of path come out of this:
 Payload and encoding analysis is reported the same way. Where the scanner determined that output encoding neutralised the characters a payload needed, the path says so explicitly — *"Context html_attribute: unescaped breakout characters none; encoded characters &quot; &lt; &gt; &amp;"* — rather than leaving a reflected parameter looking exploitable.
 
 Every step that came from a finding is clickable (and keyboard-reachable), opening that finding's full evidence. The tab is hidden entirely when a scan produced nothing to correlate.
+
+#### Triage — recording that a finding was reviewed
+
+Without this, every finding is permanently equal. Somebody reviews a report, works out that three CVE candidates do not apply to their build, and has **nowhere to put that**. The next scan shows the same three with the same weight, the report never gets quieter, and people stop reading it. A scanner nobody reads finds nothing.
+
+Open any finding and choose one of four states:
+
+| State | Effect |
+|---|---|
+| `Open` | Not yet reviewed. The default. |
+| `Confirmed real` | Reviewed and verified. **Does not suppress** — it raises confidence. |
+| `False positive` | Reviewed and not real here. Removed from the counts and the attack paths. |
+| `Accepted risk` | Real, and the owner has chosen to live with it. Removed from the counts. |
+
+**Decisions survive re-scans.** Finding ids are a fresh uuid every run, so triage keys on a fingerprint derived from what the finding *is* — its CVE, its endpoint and parameter, its scanner. Mark something reviewed today and next week's scan still knows.
+
+That fingerprint is the hard part, and it is deliberately conservative. Under-normalising means the fingerprint changes and you re-triage something — annoying. Over-normalising means two findings collapse to one key and suppressing one **silently hides the other** — a real vulnerability buried by a tool you trusted. So volatile-but-meaningless text is collapsed (`valid for 53 more days`, `2 Open Port(s) Found`) while anything identifying is not: `Port: 3306/mysql` and `Port: 22/ssh` stay separate decisions, and a blanket digit rule would have merged them.
+
+**Two rules stop this becoming a way to hide problems**, which is the obvious failure mode of any suppression feature:
+
+- **Suppressing requires a written reason.** A decision with no rationale is deletion with extra steps, so the server rejects it — not just the form.
+- **Nothing is ever deleted.** Suppressed findings stay in the report and in every export, carrying their state, reason and timestamp. The report gains a banner stating how many are suppressed and why, with a toggle to reveal them. A quiet report always says why it is quiet.
+
+Decisions live in `triage.json` (set `TRIAGE_STORE_PATH` to move it), so this works without MongoDB like everything else here.
 
 #### Every card explains itself, and every card can be re-run
 
