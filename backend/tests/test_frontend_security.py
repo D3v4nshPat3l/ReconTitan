@@ -18,6 +18,7 @@ def test_javascript_files_parse_with_node():
     # Syntax itself is checked in CI with node --check; this test verifies the expected files exist.
     assert (ROOT / "frontend" / "dashboard.js").is_file()
     assert (ROOT / "frontend" / "report.js").is_file()
+    assert (ROOT / "frontend" / "attack-surface-tree.js").is_file()
 
 
 def test_escape_helpers_render_zero_rather_than_blanking_it():
