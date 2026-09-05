@@ -94,6 +94,7 @@ Point it at a domain and it will:
 - **Analyse what it found** — TLS, security headers, cookie flags, CORS, technology fingerprints, JavaScript inventory, WAF detection, subdomain-takeover exposure
 - **Match known weaknesses** — CVE candidates by CPE version range, OWASP Top 10 categorisation
 - **Prioritise real-world exploit risk** — CISA KEV status and FIRST EPSS probability rank version-confirmed CVEs without confusing exploit activity with CVSS severity
+- **Correlate findings into attack paths** — join entry point, service, software, CVE and technique into one chain, labelling each link confirmed, supported or possible
 - **Optionally simulate an attacker** — bounded, paced, explicitly authorised active probes
 - **Write it up** — an interactive report plus PDF, JSON and HTML export
 
@@ -122,6 +123,33 @@ The **Vulnerabilities** card is exploit-aware. Version-confirmed CVEs are ordere
 This enrichment is fail-soft. If CISA or FIRST is unreachable, the scan still completes and labels the missing status as unavailable instead of falsely saying the CVE is not exploited. Results are cached for six hours by default. An `URGENT` CVE also triggers the existing email and desktop alerts even when its base CVSS severity is below `high`. Only CVE identifiers are sent to FIRST; the target hostname, IP, and evidence are never submitted. Set `EXPLOIT_INTEL_ENABLED=false` to disable the network enrichment, or tune `EXPLOIT_INTEL_TIMEOUT_SECONDS` and `EXPLOIT_INTEL_CACHE_TTL_SECONDS` in `.env`.
 
 The report also has a separate **Attack surface** tab inspired by the animated node-link navigation of OSINT Framework. The normal **Scan output** remains the default and keeps its original position. In the second tab, selecting a compact circular node grows its connected branch downward with a smooth enter/update transition; collapsing it retracts that branch. Children remain in one width-bounded vertical tree instead of spreading into horizontal cards, and the canvas stays within the report width. The hierarchy covers subdomains, IP addresses, open services, technologies, web input points, severity-grouped findings, and scanner coverage. Finding leaves open the existing evidence modal, and the tree never launches extra probes.
+
+#### Attack paths — how the findings connect
+
+A third tab, **Attack paths**, answers the question a list of findings does not: *how would someone actually get in, and what would they reach next?* It correlates evidence the scan already collected into ordered chains — entry point → exposed service → software → known vulnerability → technique → impact — and sends no traffic of its own.
+
+The reason it is worth having is also the reason it is easy to get wrong. A tool that renders a plausible-looking kill chain teaches you to trust a story it cannot support. So every step carries one of three labels, and the view never flattens them:
+
+| Label | Means |
+|---|---|
+| `confirmed` | Observed or safely proven **on this target** |
+| `supported` | Several observations agree, or an authoritative source does |
+| `possible` | A plausible next step that **was never executed** |
+
+Each path states its weakest link in words, not only in colour: *"The chain ends in a step that was never executed. Treat the outcome as unproven."*
+
+Four kinds of path come out of this:
+
+- **Confirmed** — a Danger Mode stage executed a bounded proof. Every step is `confirmed` and the impact shown is the one the scanner actually demonstrated, not a generic list.
+- **Version-confirmed** — the detected version falls inside a CVE's affected range. The service, software and CVE links are `confirmed`; the technique is `possible`, because no exploit was run.
+- **Supported** — an exposure that is real but whose consequence was not tested, such as a database port reachable from the internet.
+- **Blocked** — a route the scanner tested where a control held. Kept deliberately: knowing *which* control is holding is worth as much as knowing where a hole is. A blocked path shows no impact at all.
+
+**The distinction this feature exists to protect:** CISA KEV proves a vulnerability is exploited *in the wild*. It never proves this host was exploited. A KEV entry appears as a `supported` step reading *"this does not prove exploitation of this target"*, and it can never promote a path to confirmed. That rule is covered by tests, not just by wording.
+
+Payload and encoding analysis is reported the same way. Where the scanner determined that output encoding neutralised the characters a payload needed, the path says so explicitly — *"Context html_attribute: unescaped breakout characters none; encoded characters &quot; &lt; &gt; &amp;"* — rather than leaving a reflected parameter looking exploitable.
+
+Every step that came from a finding is clickable (and keyboard-reachable), opening that finding's full evidence. The tab is hidden entirely when a scan produced nothing to correlate.
 
 #### Every card explains itself, and every card can be re-run
 
