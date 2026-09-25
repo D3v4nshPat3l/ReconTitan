@@ -82,8 +82,12 @@ def test_reverse_ip_lookup_is_off_by_default(monkeypatch):
 # ── A skipped scan must not look like a clean scan ──────────────────────────
 
 def test_port_scan_reports_that_it_did_not_run(monkeypatch):
-    """No scanner and no fallback must not read as 'no open ports'."""
+    """Nothing available at all must not read as 'no open ports'."""
     monkeypatch.setattr(port_scan.settings, "ALLOW_HACKERTARGET", False)
+    # The built-in connect scanner would otherwise run here, which is the
+    # point of it existing. Disabled so this still exercises the case where
+    # genuinely nothing is available.
+    monkeypatch.setattr(port_scan.settings, "ALLOW_BUILTIN_PORT_SCAN", False)
     monkeypatch.setattr(port_scan, "validate_scan_target", lambda t, **k: (True, "example.com", ""))
     monkeypatch.setattr(port_scan, "resolve_target_addresses", lambda d: ["93.184.216.34"])
     # Stub the resolver, not shutil.which: the scanner also looks in the
@@ -96,7 +100,41 @@ def test_port_scan_reports_that_it_did_not_run(monkeypatch):
     assert len(findings) == 1
     assert findings[0]["title"] == "Port Scan Did Not Run"
     assert "not evidence" in findings[0]["description"].lower()
-    assert "ALLOW_HACKERTARGET" in findings[0]["remediation"]
+    assert "ALLOW_BUILTIN_PORT_SCAN" in findings[0]["description"]
+
+
+def test_builtin_scanner_runs_before_the_third_party_fallback(monkeypatch):
+    """A local scan must be preferred over disclosing the target to anyone else."""
+    monkeypatch.setattr(port_scan.settings, "ALLOW_HACKERTARGET", True)
+    monkeypatch.setattr(port_scan.settings, "ALLOW_BUILTIN_PORT_SCAN", True)
+    monkeypatch.setattr(port_scan, "validate_scan_target", lambda t, **k: (True, "example.com", ""))
+    monkeypatch.setattr(port_scan, "resolve_target_addresses", lambda d: ["93.184.216.34"])
+    monkeypatch.setattr(port_scan, "_find_binary", lambda b: None)
+    monkeypatch.setattr(port_scan, "_builtin_portscan", lambda a: "443/tcp open https\n")
+
+    def _must_not_run(address):
+        raise AssertionError("the third-party fallback ran while a local scan was available")
+
+    monkeypatch.setattr(port_scan, "_hackertarget_portscan", _must_not_run)
+
+    findings = port_scan.run_port_scan("example.com")
+
+    assert any(f["tool"] == "builtin" for f in findings)
+    assert any("443" in f.get("evidence", "") for f in findings)
+
+
+def test_builtin_scanner_states_it_did_not_cover_every_port(monkeypatch):
+    """A bounded scan finding nothing is not the same as no ports being open."""
+    monkeypatch.setattr(port_scan.settings, "ALLOW_BUILTIN_PORT_SCAN", True)
+    monkeypatch.setattr(port_scan, "validate_scan_target", lambda t, **k: (True, "example.com", ""))
+    monkeypatch.setattr(port_scan, "resolve_target_addresses", lambda d: ["93.184.216.34"])
+    monkeypatch.setattr(port_scan, "_find_binary", lambda b: None)
+    monkeypatch.setattr(port_scan, "_builtin_portscan", lambda a: "# builtin connect scan: 0 open\n")
+
+    findings = port_scan.run_port_scan("example.com")
+
+    assert findings[0]["title"] == "No Common Open TCP Ports Found"
+    assert "not all 65535" in findings[0]["description"]
 
 
 def test_port_scan_skip_notice_names_the_real_cause(monkeypatch):

@@ -37,6 +37,125 @@ DANGEROUS_PORTS = {
 }
 
 
+#: The TCP ports that actually carry internet-facing services, plus the ones
+#: whose exposure is itself the finding. Deliberately a curated few hundred
+#: rather than a swept range: with a connect timeout per port, a 65535-port
+#: sweep does not finish inside any scan budget, and a scan that does not
+#: finish reports nothing.
+BUILTIN_SCAN_PORTS: tuple[int, ...] = tuple(sorted({
+    # Web and proxies
+    80, 81, 88, 443, 444, 591, 593, 832, 981, 1010, 1311, 2082, 2083, 2086,
+    2087, 2095, 2096, 2480, 3000, 3001, 3002, 3128, 3333, 4000, 4001, 4002,
+    4100, 4243, 4567, 4711, 4712, 4993, 5000, 5001, 5104, 5108, 5280, 5281,
+    5601, 5800, 6543, 7000, 7001, 7002, 7396, 7474, 8000, 8001, 8002, 8003,
+    8004, 8005, 8006, 8008, 8009, 8010, 8014, 8042, 8060, 8069, 8080, 8081,
+    8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089, 8090, 8091, 8118, 8123,
+    8172, 8181, 8222, 8243, 8280, 8281, 8333, 8337, 8443, 8500, 8501, 8530,
+    8531, 8834, 8880, 8888, 8983, 9000, 9001, 9002, 9043, 9060, 9080, 9090,
+    9091, 9200, 9443, 9800, 9981, 9999, 10000, 10250, 11371, 12443, 16080,
+    18091, 18092, 20720, 28017,
+    # Remote access and management
+    22, 23, 513, 514, 3389, 5900, 5901, 5902, 5985, 5986, 4899, 5938, 6000,
+    6001, 6002, 7070, 32768,
+    # Mail
+    25, 26, 110, 143, 465, 475, 587, 993, 995, 2525, 24,
+    # File transfer and sharing
+    20, 21, 69, 115, 139, 445, 548, 873, 989, 990, 2049, 2121, 3702,
+    # Directory, auth and time
+    49, 88, 113, 123, 389, 464, 636, 749, 3268, 3269, 1812, 1813,
+    # Databases and caches
+    1433, 1434, 1521, 1830, 2483, 2484, 3050, 3306, 3351, 4505, 4506, 5432,
+    5433, 5984, 6379, 7199, 7473, 8086, 8087, 9042, 9160, 11211, 27017,
+    27018, 27019, 50000,
+    # Message queues, orchestration and infrastructure
+    2375, 2376, 2377, 4369, 5222, 5223, 5269, 5671, 5672, 6066, 6443, 7077,
+    8300, 8301, 8302, 8400, 8600, 9092, 9093, 9300, 9418, 15672, 25672,
+    # Industrial, printing and misc services
+    102, 502, 515, 631, 623, 1099, 1723, 1900, 2000, 2001, 3299, 4444, 4445,
+    5060, 5061, 5353, 5666, 5667, 6660, 6661, 6662, 6663, 6664, 6665, 6666,
+    6667, 6668, 6669, 7777, 8021, 9100, 9101, 9102, 10001, 11111, 20000,
+    44818, 47808,
+}))
+
+#: Names for ports whose registered service name is missing or unhelpful on
+#: Windows, where ``getservbyport`` covers far less than it does on Linux.
+PORT_SERVICE_NAMES: dict[int, str] = {
+    21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "domain", 80: "http",
+    110: "pop3", 111: "rpcbind", 135: "msrpc", 139: "netbios-ssn", 143: "imap",
+    389: "ldap", 443: "https", 445: "microsoft-ds", 465: "smtps", 587: "submission",
+    636: "ldaps", 993: "imaps", 995: "pop3s", 1433: "ms-sql-s", 1521: "oracle",
+    2049: "nfs", 2375: "docker", 2376: "docker-tls", 3000: "http-alt",
+    3306: "mysql", 3389: "ms-wbt-server", 5432: "postgresql", 5601: "kibana",
+    5672: "amqp", 5900: "vnc", 5985: "wsman", 5986: "wsmans", 6379: "redis",
+    6443: "kubernetes", 8000: "http-alt", 8080: "http-proxy", 8443: "https-alt",
+    9042: "cassandra", 9092: "kafka", 9200: "elasticsearch", 9300: "elasticsearch-cluster",
+    11211: "memcached", 15672: "rabbitmq-mgmt", 27017: "mongodb", 27018: "mongodb",
+}
+
+
+def _service_name(port: int) -> str:
+    if port in PORT_SERVICE_NAMES:
+        return PORT_SERVICE_NAMES[port]
+    try:
+        import socket as _socket
+
+        return _socket.getservbyport(port, "tcp")
+    except Exception:  # noqa: BLE001 — an unknown port is not an error
+        return "unknown"
+
+
+def _builtin_portscan(address: str) -> str:
+    """TCP connect scan in pure Python, for hosts with no scanner installed.
+
+    This exists because the alternative was worse. Without a local binary the
+    only remaining option was a third-party API that has to be told the
+    target's address, and a scan authorization frequently does not extend to
+    disclosing the host to an unrelated company. A connect scan finds less
+    than nmap -- no version detection, no OS fingerprint, no UDP -- but it
+    runs on the scanning machine, and what it does report is directly observed.
+
+    Output is formatted like nmap's so the existing parser handles it.
+    """
+    import socket
+    from concurrent.futures import ThreadPoolExecutor
+
+    timeout = settings.PORT_SCAN_CONNECT_TIMEOUT
+
+    def _probe(port: int) -> int | None:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
+                if sock.connect_ex((address, port)) == 0:
+                    return port
+        except OSError:
+            return None
+        return None
+
+    ports = BUILTIN_SCAN_PORTS
+    workers = min(settings.PORT_SCAN_THREADS, len(ports))
+    open_ports: list[int] = []
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for result in pool.map(_probe, ports):
+                if result is not None:
+                    open_ports.append(result)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[portscan] builtin scan failed: %s", exc)
+        return ""
+
+    logger.info(
+        "[portscan] builtin connect scan of %s: %d/%d ports open",
+        address, len(open_ports), len(ports),
+    )
+    if not open_ports:
+        # An empty result is a real result here, unlike a missing binary. Say
+        # so in the parser's own format so it is not mistaken for "no output".
+        return f"# builtin connect scan: 0 of {len(ports)} probed ports open\n"
+    return "\n".join(
+        f"{port}/tcp open {_service_name(port)}" for port in sorted(open_ports)
+    ) + "\n"
+
+
 def _hackertarget_portscan(target: str) -> str:
     """Third-party port scan, used only when no local scanner is installed.
 
@@ -305,6 +424,12 @@ def run_port_scan(target: str) -> list[dict]:
     if not raw:
         raw = _nmap_subprocess(address, domain)
         method = "nmap" if raw else ""
+    if not raw and settings.ALLOW_BUILTIN_PORT_SCAN:
+        # Preferred over the third-party fallback, and deliberately ordered
+        # before it: this runs on the scanning machine and tells nobody else
+        # what is being scanned.
+        raw = _builtin_portscan(address)
+        method = "builtin" if raw else ""
     if not raw:
         raw = _hackertarget_portscan(address)
         method = "hackertarget" if raw else ""
@@ -316,16 +441,18 @@ def run_port_scan(target: str) -> list[dict]:
         local_available = bool(_find_binary("rustscan") or _find_binary("nmap"))
         if local_available:
             reason = "A local scanner ran but returned no parseable output."
-        elif settings.ALLOW_HACKERTARGET:
+        elif not settings.ALLOW_BUILTIN_PORT_SCAN:
             reason = (
-                "Neither rustscan nor nmap is installed, and the third-party "
-                "fallback returned no usable result."
+                "Neither rustscan nor nmap is installed, and the built-in connect "
+                "scanner is disabled (ALLOW_BUILTIN_PORT_SCAN=false). No port scan "
+                "was performed — this is not evidence that no ports are open."
             )
         else:
             reason = (
-                "Neither rustscan nor nmap is installed, and the third-party "
-                "fallback is disabled (ALLOW_HACKERTARGET=false). No port scan "
-                "was performed — this is not evidence that no ports are open."
+                "Neither rustscan nor nmap is installed, and the built-in connect "
+                "scanner returned no usable result — every probe failed, which "
+                "usually means outbound connections are filtered on this host. "
+                "This is not evidence that no ports are open."
             )
         return [{
             "tool": "port_scan", "category": "port_scan", "severity": "info",
@@ -333,9 +460,9 @@ def run_port_scan(target: str) -> list[dict]:
             "description": reason,
             "evidence": f"Target: {domain}\nPinned address: {address}",
             "remediation": (
-                "Install nmap (or rustscan) on the scanner host to run this check locally, "
-                "or set ALLOW_HACKERTARGET=true to permit the third-party fallback — which "
-                "discloses the target address to api.hackertarget.com."
+                "Install nmap (or rustscan) on the scanner host for version detection "
+                "and wider port coverage. The built-in scanner needs nothing installed "
+                "but reports open ports only, without service versions."
             ),
         }]
 
@@ -344,7 +471,15 @@ def run_port_scan(target: str) -> list[dict]:
         return [{
             "tool": method, "category": "port_scan", "severity": "info",
             "title": "No Common Open TCP Ports Found",
-            "description": f"No open TCP ports were parsed for {domain} using {method}.",
+            "description": (
+                f"No open TCP ports were parsed for {domain} using {method}."
+                + (
+                    f" The built-in scanner probes {len(BUILTIN_SCAN_PORTS)} commonly "
+                    "used TCP ports, not all 65535, so a service on an unusual port "
+                    "would not appear here."
+                    if method == "builtin" else ""
+                )
+            ),
             "evidence": f"Target: {domain}\nPinned address: {address}\n\n{raw[:1000]}",
         }]
 
