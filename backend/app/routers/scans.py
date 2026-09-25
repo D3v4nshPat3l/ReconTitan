@@ -270,6 +270,51 @@ def get_scan_report(scan_id: str):
     return ScanReport(**_report_payload(record))
 
 
+def _export_payload(record: dict) -> dict:
+    """Normalise a stored scan record into the shape the exporters expect."""
+    payload = _report_payload(record)
+    payload["severity_counts"] = {
+        "critical": payload["critical_count"], "high": payload["high_count"],
+        "medium": payload["medium_count"], "low": payload["low_count"], "info": payload["info_count"],
+    }
+    payload["total_time_seconds"] = payload["duration_seconds"]
+    payload["ai_summary"] = record.get("ai_summary") or (
+        {"executive_summary": payload.get("summary")} if payload.get("summary") else None
+    )
+    payload["danger_summary"] = record.get("danger_summary")
+    payload["attack_paths"] = record.get("attack_paths") or []
+    payload["triage_summary"] = record.get("triage_summary") or {}
+    return payload
+
+
+@router.get("/scan/{scan_id}/report.txt")
+def get_scan_report_text(scan_id: str):
+    """Plain-text export.
+
+    PDF is for a person and JSON is for a program; neither is much use at a
+    terminal or in a diff between two scans of the same target. This carries
+    the same content, including triage state and suppression reasons.
+    """
+    from app.services.text_report import render_text_report
+
+    record = load_scan_record(scan_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    content = render_text_report(_export_payload(record)).encode("utf-8")
+    safe_target = re.sub(r"[^a-zA-Z0-9._-]+", "_", record["target"])
+    safe_target = re.sub(r"\.{2,}", "_", safe_target).strip("._") or "target"
+    return Response(
+        content=content,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="recontitan_{safe_target}.txt"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Length": str(len(content)),
+        },
+    )
+
+
 @router.get("/scan/{scan_id}/report.pdf")
 def get_scan_report_pdf(scan_id: str):
     record = load_scan_record(scan_id)
