@@ -52,6 +52,45 @@ def runtime_report() -> dict:
 
 CAPABILITIES: list[dict] = [
     {
+        "key": "subdomain_sources",
+        "name": "Passive Subdomain Aggregation",
+        "category": "Attack Surface",
+        "status": "available",
+        "description": (
+            "Aggregate subdomains from many independent public sources in pure Python, with "
+            "per-source coverage reporting. Keyed sources are skipped when their key is absent; "
+            "a source that errored is reported as such rather than counted as finding nothing."
+        ),
+        "tools": [
+            "certificate transparency", "passive DNS", "public archives",
+            "internet-wide scan data", "public source code",
+        ],
+    },
+    {
+        "key": "crawler",
+        "name": "Bounded Site Crawl",
+        "category": "Attack Surface",
+        "status": "available",
+        "description": (
+            "Walk the target's own pages within scope and inventory links, scripts, stylesheets, "
+            "images, forms and third-party dependencies. Off-scope hosts are recorded, never "
+            "fetched, and no form is ever submitted."
+        ),
+        "tools": ["same-scope link graph", "form inventory", "script endpoint extraction"],
+    },
+    {
+        "key": "dir_enum",
+        "name": "Directory Enumeration With Soft-404 Suppression",
+        "category": "Attack Surface",
+        "status": "available",
+        "description": (
+            "Enumerate paths from a bundled wordlist, using phantom probes to learn the server's "
+            "not-found response first, then suppressing results that match it by status, body "
+            "length or redirect target. Needs no external binary and no system wordlist."
+        ),
+        "tools": ["phantom baseline probing", "length clustering", "redirect clustering"],
+    },
+    {
         "key": "danger_mode",
         "name": "Danger Mode Simulation",
         "category": "Penetration Test Simulation",
@@ -141,12 +180,14 @@ SCAN_PROFILES: dict[str, dict] = {
 
 TOOL_GROUPS: dict[str, list[str]] = {
     "recon": [
-        "whois", "dns_lookup", "crt.sh", "wayback", "ipinfo", "httpx_probe", "subfinder", "amass",
+        "whois", "dns_lookup", "crt.sh", "subdomain_sources", "wayback", "ipinfo",
+        "httpx_probe", "subfinder", "amass",
     ],
     "osint": [
         "security_headers", "ssl_check", "robots_sitemap", "cors_check", "cookie_check", "waf_detect",
         "tech_stack", "favicon_hash", "js_analysis", "subdomain_takeover",
         "virustotal", "shodan", "greynoise", "censys", "theharvester",
+        "crawler", "dir_enum",
     ],
     "vuln": ["port_scan", "nvd_cve", "nuclei", "nikto", "dir_fuzzing", "sqlmap"],
     "danger": [

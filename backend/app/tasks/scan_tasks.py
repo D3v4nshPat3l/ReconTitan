@@ -19,6 +19,9 @@ from app.database import get_db
 from app.tasks.recon.whois_lookup import run_whois
 from app.tasks.recon.dns_lookup import run_dns_lookup
 from app.tasks.recon.crtsh import run_crtsh
+from app.tasks.recon.subdomain_sources import run_subdomain_sources
+from app.tasks.recon.crawler import run_crawler
+from app.tasks.recon.dir_enum import run_dir_enum
 from app.tasks.recon.wayback import run_wayback
 from app.tasks.recon.ipinfo import run_ipinfo
 from app.tasks.recon.httpx_probe import run_httpx_probe
@@ -127,11 +130,12 @@ def run_recon(self, scan_id: str, target: str):
     tools = [
         ("whois", 9, lambda: run_whois(target)),
         ("dns_lookup", 12, lambda: run_dns_lookup(target)),
-        ("crt.sh", 15, lambda: run_crtsh(target)),
-        ("wayback", 18, lambda: run_wayback(target)),
-        ("ipinfo", 21, lambda: run_ipinfo(target)),
-        ("httpx_probe", 24, lambda: run_httpx_probe(target)),
-        ("subfinder", 27, lambda: run_subfinder(target)),
+        ("crt.sh", 14, lambda: run_crtsh(target)),
+        ("subdomain_sources", 17, lambda: run_subdomain_sources(target)),
+        ("wayback", 20, lambda: run_wayback(target)),
+        ("ipinfo", 23, lambda: run_ipinfo(target)),
+        ("httpx_probe", 25, lambda: run_httpx_probe(target)),
+        ("subfinder", 28, lambda: run_subfinder(target)),
         ("amass", 30, lambda: run_amass(target)),
     ]
     count = _run_tools(scan_id, "recon", tools, parallel=True)
@@ -157,6 +161,8 @@ def run_osint(self, scan_id: str, target: str):
         ("greynoise", 67, lambda: run_greynoise(target)),
         ("censys", 69, lambda: run_censys(target)),
         ("theharvester", 71, lambda: run_theharvester(target)),
+        ("crawler", 73, lambda: run_crawler(target)),
+        ("dir_enum", 74, lambda: run_dir_enum(target)),
     ]
     count = _run_tools(scan_id, "osint", tools, parallel=True)
     return {"phase": "osint", "status": "complete", "findings": count}

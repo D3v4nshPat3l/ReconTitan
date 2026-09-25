@@ -36,6 +36,9 @@ def _tool_groups() -> dict[str, list[Tool]]:
     from app.tasks.osint.threat_intel import run_censys, run_greynoise, run_shodan, run_virustotal
     from app.tasks.osint.username_osint import run_theharvester
     from app.tasks.recon.crtsh import run_crtsh
+    from app.tasks.recon.subdomain_sources import run_subdomain_sources
+    from app.tasks.recon.crawler import run_crawler
+    from app.tasks.recon.dir_enum import run_dir_enum
     from app.tasks.recon.dns_lookup import run_dns_lookup
     from app.tasks.recon.favicon_hash import run_favicon_hash_lookup
     from app.tasks.recon.httpx_probe import run_httpx_probe
@@ -67,6 +70,7 @@ def _tool_groups() -> dict[str, list[Tool]]:
             ("whois", run_whois),
             ("dns_lookup", run_dns_lookup),
             ("crt.sh", run_crtsh),
+            ("subdomain_sources", run_subdomain_sources),
             ("wayback", run_wayback),
             ("ipinfo", run_ipinfo),
             ("httpx_probe", run_httpx_probe),
@@ -84,6 +88,8 @@ def _tool_groups() -> dict[str, list[Tool]]:
             ("cors_check", run_cors_check),
             ("cookie_check", run_cookie_check),
             ("waf_detect", run_wafw00f),
+            ("crawler", run_crawler),
+            ("dir_enum", run_dir_enum),
             ("virustotal", run_virustotal),
             ("shodan", run_shodan),
             ("greynoise", run_greynoise),
