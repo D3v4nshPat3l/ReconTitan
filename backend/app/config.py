@@ -64,6 +64,16 @@ def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
     return value
 
 
+def _env_list(name: str, default: str = "") -> list[str]:
+    """Read a comma-separated env var into a list, dropping blanks.
+
+    Used for settings that are naturally plural -- resolvers to query, file
+    extensions to append -- where a single string would force every caller to
+    repeat the same split-and-strip.
+    """
+    return [item.strip() for item in _env_str(name, default).split(",") if item.strip()]
+
+
 def _named_keys(name: str) -> dict[str, str]:
     """Parse ``label:secret`` pairs into a {secret: label} lookup.
 
@@ -252,6 +262,75 @@ class Settings:
         self.SECURITYTRAILS_API_KEY = os.getenv("SECURITYTRAILS_API_KEY", "")
         self.URLSCAN_API_KEY = os.getenv("URLSCAN_API_KEY", "")
         self.INTELX_API_KEY = os.getenv("INTELX_API_KEY", "")
+
+        # Passive subdomain aggregation. Every one of these sources is optional
+        # and every one is skipped silently when its key is absent, exactly
+        # like the threat-intel modules: a source that cannot run reports that
+        # it was skipped rather than contributing an empty result that reads
+        # as "nothing found here".
+        self.BEVIGIL_API_KEY = os.getenv("BEVIGIL_API_KEY", "").strip()
+        self.CHAOS_API_KEY = os.getenv("CHAOS_API_KEY", "").strip()
+        self.GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
+        self.HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "").strip()
+        self.LEAKIX_API_KEY = os.getenv("LEAKIX_API_KEY", "").strip()
+        self.NETLAS_API_KEY = os.getenv("NETLAS_API_KEY", "").strip()
+        self.ZOOMEYE_API_KEY = os.getenv("ZOOMEYE_API_KEY", "").strip()
+        self.BINARYEDGE_API_KEY = os.getenv("BINARYEDGE_API_KEY", "").strip()
+        self.FULLHUNT_API_KEY = os.getenv("FULLHUNT_API_KEY", "").strip()
+
+        # Per-source ceiling. Aggregating twenty sources without one turns a
+        # large domain into a report nobody can read and a payload nobody can
+        # store.
+        self.SUBDOMAIN_SOURCE_TIMEOUT = _env_int("SUBDOMAIN_SOURCE_TIMEOUT", 15, minimum=1)
+        self.SUBDOMAIN_MAX_RESULTS = _env_int("SUBDOMAIN_MAX_RESULTS", 5000, minimum=1)
+        self.SUBDOMAIN_SOURCE_CONCURRENCY = _env_int(
+            "SUBDOMAIN_SOURCE_CONCURRENCY", 10, minimum=1,
+        )
+
+        # Custom DNS resolvers, in query order. Empty means the system
+        # resolver, which is the right default: it is what the host already
+        # trusts. Naming resolvers explicitly matters when the system one is a
+        # filtering resolver that returns NXDOMAIN for names that do resolve
+        # publicly, which reads in a report as "this subdomain is gone".
+        self.DNS_SERVERS = _env_list("DNS_SERVERS", "")
+        self.DNS_RECORD_TIMEOUT = _env_int("DNS_RECORD_TIMEOUT", 8, minimum=1)
+        self.DNS_EXTENDED_RECORDS = _env_bool("DNS_EXTENDED_RECORDS", True)
+
+        # Site crawling. Bounded by page count rather than depth: depth is easy
+        # to reason about and useless as a ceiling, since one page with two
+        # hundred links costs more than ten pages with three.
+        self.CRAWLER_ENABLED = _env_bool("CRAWLER_ENABLED", True)
+        self.CRAWLER_MAX_PAGES = _env_int("CRAWLER_MAX_PAGES", 25, minimum=1)
+        self.CRAWLER_TIMEOUT = _env_int("CRAWLER_TIMEOUT", 10, minimum=1)
+        self.CRAWLER_MAX_LINKS_REPORTED = _env_int(
+            "CRAWLER_MAX_LINKS_REPORTED", 200, minimum=1,
+        )
+
+        # Directory enumeration. The bundled wordlists live beside the code so
+        # this works on a machine with no system wordlists installed, which is
+        # every Windows host and most macOS ones.
+        self.DIR_ENUM_ENABLED = _env_bool("DIR_ENUM_ENABLED", True)
+        self.DIR_ENUM_WORDLIST = _env_str("DIR_ENUM_WORDLIST", "")
+        self.DIR_ENUM_WORDLIST_SIZE = _env_str("DIR_ENUM_WORDLIST_SIZE", "common").lower()
+        self.DIR_ENUM_EXTENSIONS = _env_list("DIR_ENUM_EXTENSIONS", "")
+        self.DIR_ENUM_THREADS = min(50, _env_int("DIR_ENUM_THREADS", 20, minimum=1))
+        self.DIR_ENUM_TIMEOUT = _env_int("DIR_ENUM_TIMEOUT", 8, minimum=1)
+        self.DIR_ENUM_MAX_REQUESTS = _env_int("DIR_ENUM_MAX_REQUESTS", 5000, minimum=1)
+
+        # Archived URLs. The old ceiling of 200 was low enough that the
+        # interesting paths -- the ones nothing links to any more -- usually
+        # fell outside it.
+        self.WAYBACK_URL_LIMIT = _env_int("WAYBACK_URL_LIMIT", 10000, minimum=1)
+
+        # Built-in TCP connect scanner, used when no local scanner binary is
+        # installed. It is the honest middle option between nmap (better, but
+        # absent on most hosts) and the third-party fallback (which discloses
+        # the target address to someone else).
+        self.ALLOW_BUILTIN_PORT_SCAN = _env_bool("ALLOW_BUILTIN_PORT_SCAN", True)
+        self.PORT_SCAN_THREADS = min(200, _env_int("PORT_SCAN_THREADS", 100, minimum=1))
+        self.PORT_SCAN_CONNECT_TIMEOUT = float(
+            _env_str("PORT_SCAN_CONNECT_TIMEOUT", "1.0")
+        )
         # NVD allows 5 requests per 30s unkeyed and 50 with a free key. Without
         # one, exceeding the limit returns 403s that look identical to "no
         # vulnerabilities found", so a key materially improves CVE accuracy.
