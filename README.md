@@ -12,8 +12,8 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.139-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-698%20passing-65A30D?style=flat-square)](#testing)
-[![Modules](https://img.shields.io/badge/modules-45-A3E635?style=flat-square)](#what-it-checks)
+[![Tests](https://img.shields.io/badge/tests-752%20passing-65A30D?style=flat-square)](#testing)
+[![Modules](https://img.shields.io/badge/modules-48-A3E635?style=flat-square)](#what-it-checks)
 [![OWASP](https://img.shields.io/badge/OWASP-Top%2010-22D3EE?style=flat-square)](#owasp-coverage)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](#docker-compose--history-workers-no-time-limit)
 [![Version](https://img.shields.io/badge/version-0.5.0-8B5CF6?style=flat-square)](CHANGELOG.md)
@@ -73,6 +73,7 @@
   - [Scan alerts](#scan-alerts)
   - [Deep port scanning](#deep-port-scanning)
   - [AI explanations](#ai-explanations)
+- [Command line](#command-line)
 - [API reference](#api-reference)
 
 **Operating it**
@@ -480,6 +481,7 @@ Refresh is deliberately limited to the safe-profile scanners. The Danger Mode st
 | **PDF** | `GET /api/scan/{scan_id}/report.pdf` | Findings, evidence, KEV/EPSS fields, triage state |
 | **JSON** | `GET /api/scan/{scan_id}/report` | The full structured result — the machine-readable source of truth |
 | **HTML** | From the report page | A self-contained copy to archive or send |
+| **Text** | `GET /api/scan/{scan_id}/report.txt` | Fixed-width plain text. PDF is for a person and JSON is for a program; this is for a terminal, a pipeline, or a diff against last week's scan |
 
 Suppressed findings appear in **every** export, carrying their state, reason and timestamp.
 
@@ -555,11 +557,19 @@ Measured against `example.com` on a home connection — not estimates.
 
 | Profile | API value | Modules | Typical | What you get |
 |---|---|:--:|---|---|
-| **Recon Only** | `recon_only` | 8 | 20–55s | WHOIS, DNS, certificate transparency, archives, live hosts, subdomains |
-| **OSINT & Web Analysis** | `osint_only` | 15 | 10–25s | TLS, headers, cookies, CORS, tech stack, JS, takeover, threat intel |
+| **Recon Only** | `recon_only` | 9 | 45–120s | WHOIS, DNS (61 record types), certificate transparency, 22-source subdomain aggregation, archives, live hosts |
+| **OSINT & Web Analysis** | `osint_only` | 17 | 25–60s | TLS, headers, cookies, CORS, tech stack, JS, takeover, threat intel, site crawl, directory enumeration |
 | **Vulnerability Focus** | `vuln_only` | 2 | 5–15s | Port exposure and CVE candidates |
-| **Full Safe Scan** | `full` | 25 | 60–120s | All of the above, one report |
-| **Danger Mode** | `danger` | 25 + 20 | 3–6 min | Everything, **plus** bounded active penetration-test simulation |
+| **Full Safe Scan** | `full` | 28 | 90–180s | All of the above, one report |
+| **Danger Mode** | `danger` | 28 + 20 | 4–7 min | Everything, **plus** bounded active penetration-test simulation |
+
+The upper end of each range is what you get when a third-party source is
+having a bad day. The recon figures above were measured on runs where
+`crt.sh` returned `502` **and** the Internet Archive timed out entirely —
+the worst realistic case, not the typical one. Every stage that waits on
+someone else's server is bounded: the archive gets a **total** budget across
+all its retries, so one slow dependency cannot become the longest stage of
+the scan.
 
 **Which one should you run?**
 
@@ -580,18 +590,19 @@ Measured against `example.com` on a home connection — not estimates.
 
 ## What it checks
 
-**45 modules across four groups.** Expand each for the full list.
+**48 modules across four groups.** Expand each for the full list.
 
 <details open>
-<summary><b>Recon — 8 modules</b></summary>
+<summary><b>Recon — 9 modules</b></summary>
 <br>
 
 | Module | What it does |
 |---|---|
 | `whois` | Registrar, registration and expiry dates, registrant organisation |
-| `dns_lookup` | A, AAAA, MX, NS, TXT, CNAME, SOA + SPF/DMARC, queried concurrently |
+| `dns_lookup` | **61 record types** across 8 categories — addressing, zone authority, mail, service discovery, DNSSEC, certificate policy (CAA), key pinning (TLSA/SSHFP) — plus SPF/DMARC/DKIM analysis and wildcard detection. Resolvers configurable via `DNS_SERVERS` |
 | `crt.sh` | Certificate transparency logs — names that were *certified*, not confirmed live |
-| `wayback` | Archived URLs, which surface endpoints that are no longer linked |
+| `subdomain_sources` | **22 independent public sources** aggregated in pure Python, with per-source coverage reporting. See below |
+| `wayback` | Up to 10,000 archived URLs, **triaged** into scripts, API endpoints, parameterised URLs and sensitive file extensions |
 | `ipinfo` | Hosting attribution, ASN, geographic location |
 | `httpx_probe` | Which discovered hosts actually answer |
 | `subfinder` | Passive subdomain enumeration |
@@ -600,7 +611,7 @@ Measured against `example.com` on a home connection — not estimates.
 </details>
 
 <details>
-<summary><b>Web &amp; OSINT — 15 modules</b></summary>
+<summary><b>Web &amp; OSINT — 17 modules</b></summary>
 <br>
 
 | Module | What it does |
@@ -617,6 +628,8 @@ Measured against `example.com` on a home connection — not estimates.
 | `waf_detect` | Whether a WAF is in front, and which |
 | `virustotal` · `shodan` · `greynoise` · `censys` | Threat intelligence — **skip silently without an API key** |
 | `theharvester` | Public email and hostname harvesting |
+| `crawler` | Bounded same-scope site crawl — links, scripts, stylesheets, images, forms, third-party dependencies, endpoints inside JS. See below |
+| `dir_enum` | Path enumeration with **soft-404 suppression** and bundled wordlists. Needs no external binary. See below |
 
 Threat-intel modules cost nothing without a key and simply don't appear in the report.
 
@@ -628,7 +641,7 @@ Threat-intel modules cost nothing without a key and simply don't appear in the r
 
 | Module | What it does |
 |---|---|
-| `port_scan` | nmap when present, HackerTarget API as fallback — and it says which it used |
+| `port_scan` | nmap or rustscan when present; otherwise a **built-in TCP connect scan** over 250 commonly used ports. The third-party API is the last resort, not the second — and the report always names which ran |
 | `nvd_cve` | CVE candidates by CPE version range, then KEV/EPSS enrichment |
 
 With `ENABLE_ACTIVE_VULN_TOOLS=true` **and** the binaries installed:
@@ -646,6 +659,144 @@ These are off by default because they are intrusive relative to the "bounded, no
 `danger_recon` · `danger_axfr` · `attack_surface` · seven injection families (SQLi, command, HTML, XSS, SSTI, XXE, SSRF, NoSQL) · `reverse_shell_assessment` · `dom_injection` · `directory_fuzzing` · `path_traversal` · `idor_testing` · `business_logic` · `data_exposure` · `advanced_checks` · `owasp_matrix`
 
 Every stage is bounded, paced and non-destructive. See [Danger Mode](#danger-mode).
+
+</details>
+
+### Breadth without dependencies
+
+Four of these modules exist because the honest answer to "did this check run?"
+was too often *no*. `subfinder` and `amass` are Go binaries; `ffuf` and
+`gobuster` are too. On a machine that has only run the setup script, none of
+them are installed, so passive enumeration collapsed to one source and
+directory enumeration did not run at all. Each module below does the same job
+in pure Python, so it runs wherever the scanner runs.
+
+<details>
+<summary><b>Passive subdomain aggregation — 22 sources</b></summary>
+<br>
+
+Nine sources need **no API key** and are queried on every scan. Twelve more
+activate when you supply a free key. One is gated behind
+`ALLOW_HACKERTARGET` because answering requires handing it the target.
+
+**The coverage table is the point.** Every source reports its own outcome —
+answered, rate-limited, timed out, or skipped for a missing key — because a
+source that never ran found nothing for a reason that has nothing to do with
+the target:
+
+```
+Source coverage:
+  crt.sh               412 names
+  certspotter          380 names
+  subdomain.center     265 names
+  alienvault             — rate-limited (429)
+  virustotal             — skipped: no API key (VIRUSTOTAL_API_KEY)
+```
+
+A separate finding states how many sources did **not** contribute, so the
+subdomain count is read as a floor rather than a total. Another lists the
+names **only one source** knew about — the ones a single-source enumeration
+would have missed entirely, and the ones most worth confirming by hand.
+
+Keys are all optional and all free at the tier used: `BEVIGIL_API_KEY`,
+`CHAOS_API_KEY`, `GITHUB_TOKEN`, `HUNTER_API_KEY`, `LEAKIX_API_KEY`,
+`NETLAS_API_KEY`, `ZOOMEYE_API_KEY`, `BINARYEDGE_API_KEY`, `FULLHUNT_API_KEY`,
+plus the threat-intel keys you may already have set.
+
+</details>
+
+<details>
+<summary><b>Site crawl — the link graph a target publishes about itself</b></summary>
+<br>
+
+Walks the target's own pages and inventories what they reference: internal and
+external links, scripts, stylesheets, images, forms (with method and field
+names), endpoints extracted from JavaScript bundles, and revealing HTML
+comments.
+
+Three constraints make it safe to run on a standard profile rather than behind
+the Danger Mode gate:
+
+- **Same-scope only.** Off-scope hosts are recorded as third-party
+  dependencies and never fetched. Crawling them would be scanning someone the
+  operator has no authorization for.
+- **Bounded by page count, not depth.** Depth reads as a ceiling and is not
+  one — a single page with three hundred links costs more than ten pages with
+  three.
+- **It reads, it does not submit.** Forms are inventoried because an
+  unprotected state-changing form is worth knowing about. Nothing is ever
+  posted to one.
+
+POST forms with no field whose name suggests a CSRF token are reported as a
+**candidate** — the protection may be a `SameSite` cookie, a custom header, or
+a token name this check does not recognise, and the finding says so.
+
+</details>
+
+<details>
+<summary><b>Directory enumeration — and the soft-404 problem</b></summary>
+<br>
+
+A server that answers `200 OK` with a "page not found" body for every unknown
+path turns a 400-word list into 400 findings, all of them false. That is the
+single reason naive directory brute-forcing is untrustworthy, so it is handled
+before anything else runs:
+
+1. **Phantom probing.** Several paths that cannot exist are requested first.
+   Whatever comes back *is* this server's idea of "not found" — its status,
+   its body length, its redirect target.
+2. **Length clustering.** Responses whose body length matches a phantom's
+   within a small tolerance are discarded. The tolerance exists because
+   soft-404 pages routinely echo the requested path, so two "not found" pages
+   differ by a few bytes while being the same page.
+3. **Redirect clustering.** A server that sends every unknown path to `/login`
+   produces one redirect target repeated across the whole list. That target is
+   learned from the phantoms and suppressed.
+
+Verified against a fixture pair — one hard-404 server and one soft-404 server
+that returns `200` with a path-echoing body for everything. Both produce
+identical results: the four real paths found, 371 of 375 suppressed.
+
+Every surviving path is reported with **why it was believed**: its status, its
+length, and the phantom baseline it differed from. The report states plainly
+whether the server returns a clean 404 (status alone is reliable) or soft-404s
+(results filtered by length, treat with more caution).
+
+Wordlists ship with the project in `backend/app/wordlists/` — `small` (150),
+`common` (375, the default) and `big` (837) — generated by a documented,
+reviewable script rather than checked in as an opaque blob. `DIR_ENUM_WORDLIST`
+points at your own; `DIR_ENUM_EXTENSIONS` appends extensions.
+
+If no baseline can be established, **nothing is tested** and the module says
+so. Enumerating without knowing what "not found" looks like produces a list
+that cannot be distinguished from noise.
+
+</details>
+
+<details>
+<summary><b>Archived URLs, triaged</b></summary>
+<br>
+
+The archive's value is that it remembers endpoints a site has stopped linking
+to — a retired API version, a debug handler removed from the navigation but
+not from the router. Up to 10,000 URLs are retrieved and sorted into what each
+one is worth looking at for:
+
+| Bucket | Why it matters |
+|---|---|
+| **JavaScript files** | Old bundles contain endpoints and flags removed from the current build |
+| **API endpoints** | Retired API versions still routed because nothing linked to them |
+| **Sensitive extensions** | `.sql` `.env` `.bak` `.key` `.log` — files that should never have been served |
+| **Parameterised URLs** | Grouped by what the parameter suggests: redirect/SSRF, object reference, file access, injection surface, authentication |
+| **Sensitive path names** | Admin, debug and auth surfaces the archive recorded |
+
+A request that exceeds its timeout is **retried with a smaller limit** rather
+than returning nothing — a smaller sample is a worse answer than the full set
+and a much better one than no answer.
+
+Every URL here is a *historical* observation. The archive recorded it once;
+that is not evidence the path still exists, and the module never requests one
+to find out.
 
 </details>
 
@@ -818,6 +969,79 @@ Setup guide: **[`docs/OLLAMA_SETUP.md`](docs/OLLAMA_SETUP.md)**
 
 ---
 
+## Command line
+
+The web UI is the primary interface. A CLI exists because some things it
+cannot do are ordinary requests: running a scan from cron or CI without a
+browser, piping a report into `grep` or `jq`, or working on a headless host.
+
+It shares the scan pipeline with the API rather than reimplementing it, so a
+finding at a terminal is the same finding the report shows.
+
+```bash
+python recontitan.py example.com
+```
+
+```bash
+python recontitan.py example.com --profile recon --format json -o scan.json
+```
+
+Run specific modules regardless of profile:
+
+```bash
+python recontitan.py example.com -m dns_lookup,subdomain_sources,crawler
+```
+
+See what is available here, including which binary-backed modules are missing
+on this machine:
+
+```bash
+python recontitan.py --list-modules
+```
+
+### Options
+
+| Flag | Purpose |
+|---|---|
+| `-p, --profile` | `recon` · `osint` · `vuln` · `full` (default) · `danger` |
+| `-m, --modules` | Run only these modules, comma-separated. Overrides `--profile` |
+| `-f, --format` | `txt` (default) · `json` · `html` · `pdf` |
+| `-o, --output` | Write here instead of stdout. Required for `pdf` |
+| `-d, --dns` | Custom DNS resolvers, comma-separated |
+| `-T, --timeout` | Per-request timeout in seconds |
+| `-w, --wordlist` | Path to your own directory-enumeration wordlist |
+| `--wordlist-size` | `small` · `common` · `big` — which bundled list to use |
+| `-e, --extensions` | Extensions to append during enumeration, e.g. `php,bak` |
+| `--dir-threads` · `--port-threads` · `--crawl-pages` · `--wayback-limit` | Per-run bounds |
+| `--no-crawl` · `--no-dir-enum` · `--no-extended-dns` | Skip a stage |
+| `--allow-private` | Permit private targets. For a local lab only |
+| `--danger-ack` | The typed authorisation phrase, required for `--profile danger` |
+| `-q, --quiet` | Suppress progress output |
+| `--fail-on` | Exit non-zero when a finding at or above this severity is present |
+
+Every tuning flag overrides `.env` **for that run only** — nothing is written
+back.
+
+Progress goes to **stderr** and the report to **stdout**, so this works:
+
+```bash
+python recontitan.py example.com -f json -q | jq '.findings[] | select(.severity=="high")'
+```
+
+`--fail-on` makes it usable as a CI gate:
+
+```bash
+python recontitan.py example.com --fail-on high -q -o report.txt
+```
+
+> **Danger Mode is gated identically here.** `--profile danger` requires
+> `ALLOW_DANGER_MODE=true` *and* the exact phrase via `--danger-ack`. The CLI
+> is not a way around the acknowledgement.
+
+<div align="right"><sub><a href="#table-of-contents">▲ back to top</a></sub></div>
+
+---
+
 ## API reference
 
 Interactive docs are served at **`/api/docs`** whenever `RECONTITAN_DEBUG=true`. They are disabled in production on purpose.
@@ -839,6 +1063,7 @@ X-ReconTitan-Key: <your key>
 | `POST` | `/api/scan/{scan_id}/cancel` | Stop a running scan |
 | `GET` | `/api/scan/{scan_id}/report` | Full structured JSON report |
 | `GET` | `/api/scan/{scan_id}/report.pdf` | PDF export |
+| `GET` | `/api/scan/{scan_id}/report.txt` | Plain-text export — greppable, diffable, readable over SSH |
 | `POST` | `/api/report/pdf` | Render a PDF from a supplied report body |
 | `GET` | `/api/rescan` | Re-run a single module against an existing scan |
 | `GET` · `POST` | `/api/triage` | Read and record finding decisions |
@@ -999,9 +1224,13 @@ node --test frontend/tests/*.test.cjs
 ```
 
 ```
-650 passed, 11 skipped, 3 deselected
+704 passed, 3 deselected
 48 frontend tests passed
 ```
+
+The three deselected checks require a serverless deployment topology. With the
+dev requirements installed (`pip install -r backend/requirements-dev.txt`) the
+previously environment-dependent cases run too; without them they skip.
 
 <details>
 <summary><b>Full release verification (Windows)</b></summary>
@@ -1020,7 +1249,7 @@ node --check frontend/attack-paths.js
 
 </details>
 
-The three deselected checks require a serverless deployment topology; the eleven skipped cases are environment-dependent integrations. The local launcher is intentionally synchronous, so Redis and Celery are not required for the verified local path.
+The local launcher is intentionally synchronous, so Redis and Celery are not required for the verified local path.
 
 <div align="right"><sub><a href="#table-of-contents">▲ back to top</a></sub></div>
 
@@ -1034,7 +1263,7 @@ The current release was also smoke-tested against the running local service:
 
 | Check | Result |
 |---|---|
-| Backend regression suite | **650 passed**, 11 skipped, 3 serverless-only checks deselected |
+| Backend regression suite | **704 passed**, 3 serverless-only checks deselected |
 | Frontend Node suite | **48 passed** |
 | Python compilation and lint | Passed |
 | JavaScript syntax checks | Passed for report and attack-path modules |
