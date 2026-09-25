@@ -323,4 +323,21 @@ def test_wayback_survives_one_endpoint_failing(monkeypatch):
 
 def test_wayback_total_failure_does_not_raise(monkeypatch):
     monkeypatch.setattr(wayback.requests, "get", _wayback_stub(available=None, cdx=None))
-    assert wayback.run_wayback("example.com") == []
+    assert isinstance(wayback.run_wayback("example.com"), list)
+
+
+def test_wayback_unreachable_archive_is_reported_not_silent(monkeypatch):
+    """An unreachable archive must not look like a target with no archived URLs.
+
+    Returning nothing here is the failure this project exists to avoid: the
+    archive is the only source for endpoints a site no longer links to, so
+    silence means that part of the attack surface went unexamined while the
+    report looked complete.
+    """
+    monkeypatch.setattr(wayback.requests, "get", _wayback_stub(available=None, cdx=None))
+
+    findings = wayback.run_wayback("example.com")
+
+    assert len(findings) == 1
+    assert findings[0]["category"] == "scanner_coverage"
+    assert "not evidence" in findings[0]["description"].lower()
