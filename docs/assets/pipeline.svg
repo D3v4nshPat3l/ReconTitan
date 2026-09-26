@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" width="900" height="260" role="img"
+     aria-label="Animated diagram of the six-stage ReconTitan scan pipeline: recon, OSINT and web, vulnerability, exploit intelligence, optional danger mode, and report.">
+  <title>The ReconTitan scan pipeline</title>
+  <desc>Six stages connected left to right. A pulse of data travels along the connectors to show that each
+  stage feeds the next: recon discovers hosts, OSINT fingerprints technology, the vulnerability stage matches
+  CVEs against those fingerprints, exploit intelligence ranks them, an optional gated danger stage follows,
+  and the report stage correlates everything. Danger Mode is drawn dashed because it only runs when
+  explicitly authorised.</desc>
+
+  <style>
+    .lbl   { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; }
+    .sub   { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 9.5px; }
+    .cap   { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 10.5px; }
+    .box   { fill: #0d1f14; stroke-width: 1.5; }
+    .txt   { fill: #d9f99d; }
+    .muted { fill: #7f9b86; }
+    .wire  { stroke: #1e3a2a; stroke-width: 2; fill: none; }
+
+    /* Each stage lifts as the pulse reaches it, so the eye is pulled along
+       the chain in the order the data actually moves. */
+    .stage { animation: lift 9s ease-in-out infinite; transform-origin: center; }
+    @keyframes lift {
+      0%, 100% { opacity: .55; }
+      8%       { opacity: 1; }
+      22%      { opacity: .75; }
+    }
+    /* A dot travelling the wire. The whole point of the diagram is that the
+       stages are not independent -- a static row of boxes says the opposite. */
+    .pulse { animation: travel 9s linear infinite; }
+    @keyframes travel {
+      0%   { opacity: 0; transform: translateX(0); }
+      4%   { opacity: 1; }
+      92%  { opacity: 1; transform: translateX(760px); }
+      96%  { opacity: 0; transform: translateX(760px); }
+      100% { opacity: 0; transform: translateX(0); }
+    }
+    .gate { stroke-dasharray: 5 4; animation: march 1.6s linear infinite; }
+    @keyframes march { to { stroke-dashoffset: -18; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stage, .pulse, .gate { animation: none !important; opacity: 1 !important; transform: none !important; }
+      .pulse { opacity: 0 !important; }
+    }
+  </style>
+
+  <rect width="900" height="260" rx="10" fill="#08150e"/>
+
+  <line class="wire" x1="70" y1="112" x2="830" y2="112"/>
+
+  <g class="stage" style="animation-delay:0s">
+    <rect class="box" x="24"  y="70" width="118" height="84" rx="8" stroke="#a3e635"/>
+    <text class="lbl txt"  x="83" y="92"  text-anchor="middle">1 · RECON</text>
+    <text class="sub muted" x="83" y="110" text-anchor="middle">WHOIS · DNS · CT</text>
+    <text class="sub muted" x="83" y="124" text-anchor="middle">22 subdomain</text>
+    <text class="sub muted" x="83" y="138" text-anchor="middle">sources · archive</text>
+  </g>
+
+  <g class="stage" style="animation-delay:1.4s">
+    <rect class="box" x="166" y="70" width="118" height="84" rx="8" stroke="#22d3ee"/>
+    <text class="lbl txt"  x="225" y="92"  text-anchor="middle">2 · OSINT</text>
+    <text class="sub muted" x="225" y="110" text-anchor="middle">TLS · headers</text>
+    <text class="sub muted" x="225" y="124" text-anchor="middle">crawl · dir enum</text>
+    <text class="sub muted" x="225" y="138" text-anchor="middle">tech fingerprints</text>
+  </g>
+
+  <g class="stage" style="animation-delay:2.8s">
+    <rect class="box" x="308" y="70" width="118" height="84" rx="8" stroke="#a3e635"/>
+    <text class="lbl txt"  x="367" y="92"  text-anchor="middle">3 · VULN</text>
+    <text class="sub muted" x="367" y="110" text-anchor="middle">ports · CPE range</text>
+    <text class="sub muted" x="367" y="124" text-anchor="middle">CVE candidates</text>
+  </g>
+
+  <g class="stage" style="animation-delay:4.2s">
+    <rect class="box" x="450" y="70" width="118" height="84" rx="8" stroke="#22d3ee"/>
+    <text class="lbl txt"  x="509" y="92"  text-anchor="middle">4 · EXPLOIT</text>
+    <text class="sub muted" x="509" y="110" text-anchor="middle">CISA KEV · EPSS</text>
+    <text class="sub muted" x="509" y="124" text-anchor="middle">URGENT → VERIFY</text>
+    <text class="sub muted" x="509" y="138" text-anchor="middle">fail-soft</text>
+  </g>
+
+  <g class="stage" style="animation-delay:5.6s">
+    <rect class="box gate" x="592" y="70" width="118" height="84" rx="8" stroke="#f2777a"/>
+    <text class="lbl txt"  x="651" y="92"  text-anchor="middle">5 · DANGER</text>
+    <text class="sub muted" x="651" y="110" text-anchor="middle">20 bounded stages</text>
+    <text class="sub muted" x="651" y="124" text-anchor="middle">gated · paced</text>
+    <text class="sub muted" x="651" y="138" text-anchor="middle">non-destructive</text>
+  </g>
+
+  <g class="stage" style="animation-delay:7s">
+    <rect class="box" x="734" y="70" width="118" height="84" rx="8" stroke="#a3e635"/>
+    <text class="lbl txt"  x="793" y="92"  text-anchor="middle">6 · REPORT</text>
+    <text class="sub muted" x="793" y="110" text-anchor="middle">triage · attack</text>
+    <text class="sub muted" x="793" y="124" text-anchor="middle">paths · exports</text>
+  </g>
+
+  <circle class="pulse" cx="70" cy="112" r="4.5" fill="#a3e635"/>
+
+  <text class="cap muted" x="24" y="196">Each stage feeds the next. CVE matching needs the fingerprints OSINT produced,</text>
+  <text class="cap muted" x="24" y="212">which needed the live hosts recon produced — which is why a partial profile finds less.</text>
+  <text class="cap muted" x="24" y="236">Stage 5 is dashed because it only runs with a typed authorisation. Every stage is fail-soft:</text>
+  <text class="cap muted" x="24" y="250">a module that times out says so and the pipeline continues.</text>
+</svg>
