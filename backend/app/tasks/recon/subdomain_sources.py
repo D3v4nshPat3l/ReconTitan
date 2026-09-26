@@ -78,11 +78,20 @@ def _clean(names, domain: str) -> set[str]:
 
 
 def _get(url: str, **kwargs) -> requests.Response:
-    kwargs.setdefault("timeout", settings.SUBDOMAIN_SOURCE_TIMEOUT)
+    """GET one source, always under a timeout.
+
+    The timeout is passed as a named argument rather than folded into
+    ``kwargs``. Both forms set it, but only this one is visible to a static
+    reader -- human or analyser -- and a request without a timeout is the kind
+    of defect that shows up as a scan that never returns rather than as an
+    error anyone can trace. Naming it here means the guarantee cannot be lost
+    by a caller who passes a ``kwargs`` dict of their own.
+    """
+    timeout = kwargs.pop("timeout", settings.SUBDOMAIN_SOURCE_TIMEOUT)
     kwargs.setdefault("headers", {}).setdefault(
         "User-Agent", "Mozilla/5.0 (compatible; ReconTitan; +authorized-security-scan)"
     )
-    response = requests.get(url, **kwargs)
+    response = requests.get(url, timeout=timeout, **kwargs)
     response.raise_for_status()
     return response
 
