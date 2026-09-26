@@ -12,7 +12,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.139-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/tests-752%20passing-65A30D?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-782%20passing-65A30D?style=flat-square)](#testing)
 [![Modules](https://img.shields.io/badge/modules-48-A3E635?style=flat-square)](#what-it-checks)
 [![OWASP](https://img.shields.io/badge/OWASP-Top%2010-22D3EE?style=flat-square)](#owasp-coverage)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](#docker-compose--history-workers-no-time-limit)
@@ -74,6 +74,9 @@
   - [Deep port scanning](#deep-port-scanning)
   - [AI explanations](#ai-explanations)
 - [Command line](#command-line)
+  - [What a run looks like](#what-a-run-looks-like)
+  - [The report](#the-report-1)
+  - [Colour](#colour-and-when-you-dont-get-it)
 - [API reference](#api-reference)
 
 **Operating it**
@@ -999,6 +1002,115 @@ on this machine:
 python recontitan.py --list-modules
 ```
 
+### What a run looks like
+
+The scan log goes to **stderr**, so none of this reaches a piped report:
+
+```
+    ____                      _______ __
+   / __ \___  _________  ____/_  __(_) /_____ _____
+  / /_/ / _ \/ ___/ __ \/ __ \/ / / / __/ __ `/ __ \
+ / _, _/  __/ /__/ /_/ / / / / / / / /_/ /_/ / / / /
+/_/ |_|\___/\___/\____/_/ /_/_/ /_/\__/\__,_/_/ /_/
+
+  External attack surface assessment   v0.5.0
+
+╭─ RUN ───────────────────────────────────────────────────────────────╮
+│  Target        example.com  → 104.20.23.154                         │
+│  Profile       full   28 modules                                    │
+│  Danger Mode   locked                                               │
+│  Version       0.5.0                                                │
+│  Python        3.12.10                                              │
+╰─────────────────────────────────────────────────────────────────────╯
+
+  Only scan systems you own or have written permission to test.
+
+  SCANNING
+
+  [ 1/28] ✓  whois                      2.1s   3 finding(s)
+  [ 2/28] ✓  dns_lookup                19.0s   5 finding(s)
+  [ 3/28] ✗  crt.sh                     1.2s   HTTPError: 502
+  [ 4/28] ○  subfinder                  0.0s   no findings
+
+  →  applying triage decisions
+  →  correlating attack paths
+
+  ─────────────────────────────────────────────────────────────────────
+  ✓ scan complete   94.2s   34 findings
+  critical 0   high 2   medium 7   low 9   info 16
+```
+
+**The preflight panel exists because a scan is minutes of waiting** during
+which the only visible thing would otherwise be a hostname. Stating the
+target, the address it resolved to, the module count and the Danger Mode
+state up front turns *"is this the right target"* into a question answered
+before the waiting rather than after it.
+
+**Each module reports its own outcome** — `✓` found something, `○` ran and
+found nothing, `✗` failed with the reason. The three are deliberately
+distinct: a module that errored found nothing because it never finished,
+which is not the same as a clean result.
+
+### The report
+
+On a terminal the report is laid out for one reading pass, because that is
+usually all it gets:
+
+1. **A masthead and severity chart** — is anything on fire, before any
+   scrolling.
+2. **A contents list** — every finding on one line, ranked worst first, so
+   you choose what to open instead of reading in the order the modules
+   happened to finish.
+3. **The detail** — each finding in the same four-part shape: what was found,
+   the evidence, what to do, and how far the evidence goes.
+
+```
+╭─ [1]  HIGH   Archived Files With Sensitive Extension '.sql'
+│
+│  module    wayback_machine    category  sensitive_historical_urls
+│
+│  WHAT WAS FOUND
+│    The archive recorded 3 URLs ending in '.sql'. Files of this type
+│    should not be served by a web server at all.
+│
+│  EVIDENCE
+│    • http://example.com/db/backup.sql
+│    • http://example.com/dump.sql
+│
+│  REMEDIATION
+│    Confirm these are no longer served. If the file contained
+│    credentials, rotate them — the archived copy stays retrievable.
+│
+│  ⚠ CANDIDATE — nothing here was exploited; confirm by hand.
+│
+╰───
+```
+
+**Severity is carried by the word and the colour, never colour alone.**
+Colour-blind readers and piped output both need the word, and a report that
+only works in one terminal is not a report.
+
+### Colour, and when you don't get it
+
+Colour is decided **per stream**, not per program:
+
+| Destination | Output |
+|---|---|
+| A terminal | Full colour, boxes, contents list |
+| A pipe (`\| grep`, `\| jq`) | Plain text, zero escape codes |
+| A file (`-o report.txt`) | Plain text, zero escape codes |
+| `--no-color` or `NO_COLOR=1` | Plain text everywhere |
+| `FORCE_COLOR=1` | Colour even when piped, for CI |
+
+That split matters: an escape code in a file is corruption, and every
+downstream tool would see `[31m` where it expected a word.
+
+Two further fallbacks happen without being asked. A legacy `cmd.exe` gets
+virtual-terminal processing switched on, because otherwise it prints the
+escape codes literally — worse than no colour at all. And a console on a code
+page that cannot encode box characters gets an ASCII box instead, because a
+traceback about encoding is a worse outcome than a box drawn with dashes.
+
 ### Options
 
 | Flag | Purpose |
@@ -1016,7 +1128,9 @@ python recontitan.py --list-modules
 | `--no-crawl` · `--no-dir-enum` · `--no-extended-dns` | Skip a stage |
 | `--allow-private` | Permit private targets. For a local lab only |
 | `--danger-ack` | The typed authorisation phrase, required for `--profile danger` |
-| `-q, --quiet` | Suppress progress output |
+| `-q, --quiet` | Suppress the banner and all progress output |
+| `--no-color` | Disable colour. `NO_COLOR` in the environment does the same |
+| `--no-banner` | Skip the launch banner, keep the rest |
 | `--fail-on` | Exit non-zero when a finding at or above this severity is present |
 
 Every tuning flag overrides `.env` **for that run only** — nothing is written
@@ -1224,7 +1338,7 @@ node --test frontend/tests/*.test.cjs
 ```
 
 ```
-704 passed, 3 deselected
+734 passed, 3 deselected
 48 frontend tests passed
 ```
 
@@ -1263,7 +1377,7 @@ The current release was also smoke-tested against the running local service:
 
 | Check | Result |
 |---|---|
-| Backend regression suite | **704 passed**, 3 serverless-only checks deselected |
+| Backend regression suite | **734 passed**, 3 serverless-only checks deselected |
 | Frontend Node suite | **48 passed** |
 | Python compilation and lint | Passed |
 | JavaScript syntax checks | Passed for report and attack-path modules |
