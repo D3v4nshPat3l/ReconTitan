@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/screenshots/home.png" alt="ReconTitan" width="100%">
+<img src="docs/assets/hero-animated.svg" alt="ReconTitan — external attack surface assessment" width="100%">
 
-<br><br>
+<br>
 
 # ReconTitan
 
@@ -279,6 +279,10 @@ Python and nmap are only offered if *setup* installed them, and on Linux the uni
 ## How it works
 
 ### The pipeline
+
+<div align="center">
+<img src="docs/assets/pipeline.svg" alt="The six-stage scan pipeline: recon, OSINT, vulnerability, exploit intelligence, optional danger mode, report" width="100%">
+</div>
 
 A scan is a staged pipeline, and each stage feeds the next. That is why a `full` scan finds things a `vuln_only` scan cannot: CVE matching needs the technology fingerprints OSINT produced, which needed the live hosts recon produced.
 
@@ -1003,6 +1007,10 @@ python recontitan.py --list-modules
 ```
 
 ### What a run looks like
+
+<div align="center">
+<img src="docs/assets/terminal-demo.svg" alt="Animated replay of a ReconTitan scan in a terminal" width="100%">
+</div>
 
 The scan log goes to **stderr**, so none of this reaches a piped report:
 
