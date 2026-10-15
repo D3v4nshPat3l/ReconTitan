@@ -357,12 +357,22 @@ def test_whois_empty_record_is_reported_as_coverage_not_a_result(monkeypatch):
         def __getattr__(self, name):
             return None
 
+    seen = {}
+
+    def _whois(domain, **kwargs):
+        seen.update(kwargs)
+        return _Empty()
+
     fake = types.ModuleType("whois")
-    fake.whois = lambda domain: _Empty()
+    fake.whois = _whois
     monkeypatch.setitem(sys.modules, "whois", fake)
 
     findings = whois_lookup.run_whois("example.com")
 
+    # quiet=True is what stops python-whois logging a failed socket straight
+    # to stderr, mid-table. Suppressing it afterwards through logging config
+    # is a race; asking the library not to log is not.
+    assert seen.get("quiet") is True
     assert len(findings) == 1
     assert findings[0]["category"] == "scanner_coverage"
     assert "No Data" in findings[0]["title"]
@@ -387,7 +397,7 @@ def test_whois_populated_record_is_still_a_normal_finding(monkeypatch):
         dnssec = None
 
     fake = types.ModuleType("whois")
-    fake.whois = lambda domain: _Record()
+    fake.whois = lambda domain, **kwargs: _Record()
     monkeypatch.setitem(sys.modules, "whois", fake)
 
     findings = whois_lookup.run_whois("example.com")
@@ -421,10 +431,17 @@ def test_external_binaries_cannot_prompt_the_operator():
             target = ast.unparse(node.func)
             if target not in ("subprocess.run", "subprocess.Popen"):
                 continue
-            if not any(kw.arg == "stdin" for kw in node.keywords):
-                offenders.append(f"{module.__name__}:{node.lineno}")
+            kwargs = {kw.arg for kw in node.keywords}
+            # Both are required and they stop different things: stdin for a
+            # tool that reads a line, start_new_session for sudo, which opens
+            # /dev/tty directly and ignores stdin entirely.
+            missing = {"stdin", "start_new_session"} - kwargs
+            if missing:
+                offenders.append(
+                    f"{module.__name__}:{node.lineno} missing {sorted(missing)}"
+                )
 
     assert not offenders, (
-        "these subprocess calls inherit the terminal's stdin and can block on a "
-        f"prompt: {', '.join(offenders)}"
+        "these subprocess calls can block on a prompt from the child: "
+        f"{'; '.join(offenders)}"
     )

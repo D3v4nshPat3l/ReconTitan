@@ -282,3 +282,56 @@ def test_banner_renders_in_both_modes():
     for color in (True, False):
         banner = render_banner(Theme(_Stream(tty=True), color=color), "0.5.0")
         assert "0.5.0" in strip_ansi(banner)
+
+
+# ── module output never breaks the table ────────────────────────────────────
+
+def test_module_stderr_is_held_including_a_stale_handler(monkeypatch, tmp_path):
+    """The case that defeated the first attempt.
+
+    Rebinding sys.stderr leaves a logging handler built earlier still writing
+    to the original stream object, which is how a library error kept landing
+    in the middle of an aligned table after the stream had supposedly been
+    replaced. The redirect has to happen at the file descriptor.
+    """
+    import logging
+    import sys as _sys
+
+    from app import cli
+    import app.routers.test_scan as test_scan
+
+    # A handler holding the ORIGINAL stream, created before any redirect.
+    noisy_logger = logging.getLogger("test.stale.handler")
+    handler = logging.StreamHandler(_sys.stderr)
+    noisy_logger.addHandler(handler)
+    noisy_logger.setLevel(logging.ERROR)
+    monkeypatch.setattr(noisy_logger, "propagate", False)
+
+    def _noisy(domain):
+        print("raw print", file=_sys.stderr)
+        noisy_logger.error("stale handler line")
+        return []
+
+    monkeypatch.setattr(test_scan, "_selected_tools", lambda scan_type: [("noisy", _noisy)])
+    monkeypatch.setitem(cli._ui, "quiet", True)
+    monkeypatch.setitem(cli._ui, "verbose", False)
+
+    out = tmp_path / "r.json"
+    try:
+        code = cli.main(["example.com", "--no-banner", "-q", "-f", "json", "-o", str(out)])
+    finally:
+        noisy_logger.removeHandler(handler)
+
+    assert code == 0
+    assert out.is_file()
+
+
+def test_held_output_is_counted_not_discarded():
+    """Swallowing output silently is the same failure as swallowing a finding."""
+    import inspect
+
+    from app import cli
+
+    source = inspect.getsource(cli)
+    assert "held, -v to show" in source, "the module row must say output was held"
+    assert "-v" in cli.build_parser().format_help()
