@@ -46,6 +46,7 @@ jobs:
           bash -n deploy.sh
           bash -n setup.sh
           bash -n uninstall.sh
+          bash -n install.sh
       - name: Deployment preflight
         # Gates on configuration that fails silently rather than loudly: a
         # database that is not there, limits that stop being shared, an admin
