@@ -35,13 +35,18 @@ def _not_installed_finding(binary: str, domain: str, install_hint: str) -> dict:
 def _run_binary(cmd: list, timeout: int = 120) -> str:
     """Run a binary and return stdout. Returns '' if binary not found.
 
-    stdin is closed, not inherited. A scanner module must never be able to
-    ask the operator a question: a tool that reaches for the terminal -- amass
-    prompting for a sudo password is the real case -- otherwise blocks the
-    whole scan on a prompt that scrolls past in the middle of the module
-    rows, and blocks forever when the scan is running from cron or CI with no
-    terminal attached. With stdin closed the child reads EOF and either
-    proceeds or fails fast, which the timeout below then bounds.
+    Two guards, because they stop different things.
+
+    ``stdin=DEVNULL`` closes the child's input, so a tool that reads a line
+    from stdin gets EOF instead of blocking.
+
+    ``start_new_session=True`` is the one that matters for sudo. sudo does not
+    read the password from stdin -- it opens /dev/tty directly, which is why
+    closing stdin does nothing to it. setsid() in the child detaches it from
+    the controlling terminal, so there is no /dev/tty to open and sudo exits
+    immediately with "no tty present" instead of prompting. An amass wrapper
+    reaching for sudo otherwise stalls the scan for as long as the prompt
+    waits, and stalls forever under cron or CI where nobody can answer.
     """
     binary = cmd[0]
     if not shutil.which(binary):
@@ -49,7 +54,7 @@ def _run_binary(cmd: list, timeout: int = 120) -> str:
         return ""
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                                stdin=subprocess.DEVNULL)
+                                stdin=subprocess.DEVNULL, start_new_session=True)
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
         logger.warning("[subfinder_amass] %s timed out", binary)

@@ -7,7 +7,7 @@ def _run(cmd, timeout=120):
         return ""
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                           stdin=subprocess.DEVNULL)
+                           stdin=subprocess.DEVNULL, start_new_session=True)
         return r.stdout + r.stderr
     except Exception as e:
         logger.warning("[username_osint] %s: %s", cmd[0], e)
