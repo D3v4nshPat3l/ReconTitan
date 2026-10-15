@@ -337,3 +337,94 @@ def test_uninteresting_urls_stay_out_of_every_bucket():
     assert not buckets["api"]
     assert not buckets["sensitive"]
     assert not buckets["interesting"]
+
+
+# ── scanner honesty: a check that did not run must not look like a result ───
+
+def test_whois_empty_record_is_reported_as_coverage_not_a_result(monkeypatch):
+    """python-whois swallows a failed socket and returns an all-None record.
+
+    Treated as a successful lookup it produced an INFO finding titled "WHOIS
+    Record" whose evidence read "No WHOIS data returned" -- a finding shaped
+    like a result, describing a query that never reached a registry.
+    """
+    import sys
+    import types
+
+    from app.tasks.recon import whois_lookup
+
+    class _Empty:
+        def __getattr__(self, name):
+            return None
+
+    fake = types.ModuleType("whois")
+    fake.whois = lambda domain: _Empty()
+    monkeypatch.setitem(sys.modules, "whois", fake)
+
+    findings = whois_lookup.run_whois("example.com")
+
+    assert len(findings) == 1
+    assert findings[0]["category"] == "scanner_coverage"
+    assert "No Data" in findings[0]["title"]
+    assert "not that the domain is" in findings[0]["description"]
+
+
+def test_whois_populated_record_is_still_a_normal_finding(monkeypatch):
+    """The coverage path must not swallow a lookup that actually worked."""
+    import sys
+    import types
+
+    from app.tasks.recon import whois_lookup
+
+    class _Record:
+        registrar = "Example Registrar"
+        creation_date = None
+        expiration_date = None
+        updated_date = None
+        name_servers = None
+        country = None
+        org = None
+        dnssec = None
+
+    fake = types.ModuleType("whois")
+    fake.whois = lambda domain: _Record()
+    monkeypatch.setitem(sys.modules, "whois", fake)
+
+    findings = whois_lookup.run_whois("example.com")
+
+    assert findings[0]["category"] == "whois"
+    assert "Example Registrar" in findings[0]["evidence"]
+
+
+def test_external_binaries_cannot_prompt_the_operator():
+    """A scanner module must never be able to ask a question.
+
+    amass reaching for a sudo password blocked a scan for 22 seconds mid-run,
+    and would block forever under cron or CI where no terminal is attached.
+
+    Parsed rather than grepped: a textual scan cut at the first ")" lands
+    inside a nested call like min(a, b) and reports a false failure.
+    """
+    import ast
+    import inspect
+
+    from app.tasks.osint import username_osint
+    from app.tasks.recon import port_scan, subfinder_amass
+    from app.tasks.vulnscan import vuln_tools
+
+    offenders = []
+    for module in (subfinder_amass, username_osint, vuln_tools, port_scan):
+        tree = ast.parse(inspect.getsource(module))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            target = ast.unparse(node.func)
+            if target not in ("subprocess.run", "subprocess.Popen"):
+                continue
+            if not any(kw.arg == "stdin" for kw in node.keywords):
+                offenders.append(f"{module.__name__}:{node.lineno}")
+
+    assert not offenders, (
+        "these subprocess calls inherit the terminal's stdin and can block on a "
+        f"prompt: {', '.join(offenders)}"
+    )

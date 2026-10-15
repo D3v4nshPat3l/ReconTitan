@@ -167,6 +167,50 @@ bash setup.sh
 
 Alternatively: `chmod +x setup.sh` followed by `./setup.sh`.
 
+### Linux, unattended
+
+`setup.sh` explains each step and asks before acting. When you already know
+what you want — a fresh box, a container build, a CI job — `install.sh` does
+it without asking:
+
+```bash
+./install.sh --yes
+```
+
+```bash
+./install.sh --yes --with-tools --run
+```
+
+| Flag | |
+|---|---|
+| `-y, --yes` | Answer yes to every prompt |
+| `--with-tools` | Also install `nmap` and `whois` from your distro |
+| `--recreate` | Delete and rebuild an existing `.venv` |
+| `--python PATH` | Use a specific interpreter |
+| `--run` | Launch the CLI when it finishes |
+
+It writes a `./recontitan` launcher, so you never type a path into `.venv`
+and never need the environment activated:
+
+```bash
+./recontitan example.com --profile recon
+```
+
+> **Why it never runs `pip` outside a virtual environment.** Debian, Ubuntu,
+> Kali and Fedora now ship an *externally managed* Python (PEP 668) and refuse
+> a system-wide `pip install`. The common workaround, `--break-system-packages`,
+> does exactly what the name says — it lets pip overwrite files the package
+> manager owns, and the damage surfaces later in something unrelated. So the
+> environment is created first and every install happens inside it, through
+> `.venv/bin/python -m pip` rather than a bare `pip` that PATH might resolve
+> to the system one.
+
+It also handles the failure you are most likely to hit on a very new Python:
+when PyPI has no wheel yet for your version, `cryptography` and `pillow` try
+to compile and stop on missing C headers. Rather than printing a compiler
+backtrace, `install.sh` recognises it, names the distro packages that fix it,
+and offers to install them and retry.
+
 > `setup.sh` is for macOS and Linux **only**. Run it under Git Bash on Windows and it stops and points you at `setup.bat` — Windows lays virtual environments out differently, and continuing would overwrite a working one.
 
 The script prints its full plan before touching anything, then walks through six steps out loud:
@@ -1111,7 +1155,7 @@ Colour is decided **per stream**, not per program:
 | `FORCE_COLOR=1` | Colour even when piped, for CI |
 
 That split matters: an escape code in a file is corruption, and every
-downstream tool would see `[31m` where it expected a word.
+downstream tool would see `\x1b[31m` where it expected a word.
 
 Two further fallbacks happen without being asked. A legacy `cmd.exe` gets
 virtual-terminal processing switched on, because otherwise it prints the
