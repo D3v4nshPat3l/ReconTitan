@@ -74,7 +74,12 @@ def run_whois(target: str) -> list[dict]:
     try:
         import whois
 
-        record = whois.whois(domain)
+        # quiet=True is the library's own switch for this, and it is the only
+        # reliable one. python-whois logs a failed socket with logger.error at
+        # the point of failure, so suppressing it afterwards through logging
+        # configuration is a race against whatever the library does to the root
+        # handlers. Telling it not to log in the first place is not a race.
+        record = whois.whois(domain, quiet=True)
         fields = {
             "Registrar": record.registrar,
             "Creation Date": record.creation_date,
