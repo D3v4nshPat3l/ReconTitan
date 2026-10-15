@@ -323,6 +323,7 @@ def _nmap_subprocess(address: str, domain: str = "") -> str:
     try:
         result = subprocess.run(
             argv, capture_output=True, text=True, timeout=timeout, check=False,
+            stdin=subprocess.DEVNULL,
         )
         return result.stdout
     except subprocess.TimeoutExpired:
@@ -391,6 +392,7 @@ def _rustscan_subprocess(address: str) -> str:
         result = subprocess.run(
             [rustscan_bin, "-a", address, "--", "-sV"],
             capture_output=True, text=True, timeout=min(settings.SCAN_TIMEOUT_NMAP, 180), check=False,
+            stdin=subprocess.DEVNULL,
         )
         return result.stdout
     except (OSError, subprocess.SubprocessError) as exc:

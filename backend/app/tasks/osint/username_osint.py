@@ -6,7 +6,8 @@ def _run(cmd, timeout=120):
     if not shutil.which(cmd[0]):
         return ""
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                           stdin=subprocess.DEVNULL)
         return r.stdout + r.stderr
     except Exception as e:
         logger.warning("[username_osint] %s: %s", cmd[0], e)

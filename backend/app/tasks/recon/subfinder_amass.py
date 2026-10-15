@@ -33,13 +33,23 @@ def _not_installed_finding(binary: str, domain: str, install_hint: str) -> dict:
 
 
 def _run_binary(cmd: list, timeout: int = 120) -> str:
-    """Run a binary and return stdout. Returns '' if binary not found."""
+    """Run a binary and return stdout. Returns '' if binary not found.
+
+    stdin is closed, not inherited. A scanner module must never be able to
+    ask the operator a question: a tool that reaches for the terminal -- amass
+    prompting for a sudo password is the real case -- otherwise blocks the
+    whole scan on a prompt that scrolls past in the middle of the module
+    rows, and blocks forever when the scan is running from cron or CI with no
+    terminal attached. With stdin closed the child reads EOF and either
+    proceeds or fails fast, which the timeout below then bounds.
+    """
     binary = cmd[0]
     if not shutil.which(binary):
         logger.info("[subfinder_amass] %s not installed — skipping", binary)
         return ""
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                                stdin=subprocess.DEVNULL)
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
         logger.warning("[subfinder_amass] %s timed out", binary)
