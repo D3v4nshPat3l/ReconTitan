@@ -20,6 +20,8 @@ every override flag.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import sys
@@ -290,7 +292,8 @@ def _progress(message: str, *, quiet: bool | None = None) -> None:
 
 
 def _module_line(name: str, *, index: int, total: int, elapsed: float,
-                 findings: int = 0, error: str = "", skipped: bool = False) -> None:
+                 findings: int = 0, error: str = "", skipped: bool = False,
+                 noise: int = 0) -> None:
     """One aligned row per module, with its own outcome.
 
     The alignment is the point. A scan runs thirty modules and the operator is
@@ -309,11 +312,88 @@ def _module_line(name: str, *, index: int, total: int, elapsed: float,
         glyph, colour, detail = t.g("ok"), "green", f"{findings} finding(s)"
     else:
         glyph, colour, detail = t.g("skip"), "grey", "no findings"
+    if noise:
+        # Say that output was held, and how to see it. Dropping it without
+        # a word would be the quiet failure this project refuses elsewhere.
+        detail += t.s(f"   ({noise} log line{'s' if noise != 1 else ''} held, -v to show)", "dim", "grey")
     print(
         f"  {position} {t.s(glyph, colour)}  {name.ljust(24)}"
         f"{t.s(f'{elapsed:>6.1f}s', 'dim', 'grey')}   {t.s(detail, colour)}",
         file=sys.stderr, flush=True,
     )
+
+
+class _Held:
+    """Whatever a module wrote to stderr while it ran."""
+
+    __slots__ = ("text",)
+
+    def __init__(self) -> None:
+        self.text = ""
+
+    def lines(self) -> int:
+        return len([line for line in self.text.splitlines() if line.strip()])
+
+
+@contextlib.contextmanager
+def _quiet_module_output():
+    """Hold anything a module writes to stderr while it runs.
+
+    Redirecting at the file descriptor rather than rebinding ``sys.stderr``,
+    because rebinding does not work. A logging handler built before the swap
+    holds a reference to the original stream object and keeps writing to it,
+    which is exactly how a library error still landed in the middle of an
+    aligned table after the stream had supposedly been replaced. Pointing
+    fd 2 somewhere else catches every writer: stale handler references, raw
+    prints, warnings, and any child that inherits the descriptor.
+
+    Held text is counted and offered, never silently dropped -- a scan that
+    swallows output is the same failure as one that swallows a finding, and
+    -v prints all of it.
+
+    stdout is deliberately untouched: the report goes there.
+    """
+    held = _Held()
+    if _ui["quiet"] or _ui.get("verbose"):
+        yield held
+        return
+
+    try:
+        stderr_fd = sys.stderr.fileno()
+    except (AttributeError, ValueError, io.UnsupportedOperation):
+        # No real descriptor (a test harness has replaced the stream). Fall
+        # back to rebinding, which still catches everything that resolves
+        # sys.stderr at write time.
+        buffer = io.StringIO()
+        original = sys.stderr
+        sys.stderr = buffer
+        try:
+            yield held
+        finally:
+            sys.stderr = original
+            held.text = buffer.getvalue()
+        return
+
+    import tempfile
+
+    saved_fd = os.dup(stderr_fd)
+    sink = tempfile.TemporaryFile(mode="w+b")
+    try:
+        sys.stderr.flush()
+        os.dup2(sink.fileno(), stderr_fd)
+        try:
+            yield held
+        finally:
+            try:
+                sys.stderr.flush()
+            except Exception:  # noqa: BLE001 — the stream may be mid-failure
+                pass
+            os.dup2(saved_fd, stderr_fd)
+            sink.seek(0)
+            held.text = sink.read().decode("utf-8", errors="replace")
+    finally:
+        os.close(saved_fd)
+        sink.close()
 
 
 def _step(message: str) -> None:
@@ -486,8 +566,11 @@ def _run_scan(args: argparse.Namespace) -> tuple[dict, int]:
 
     for index, (name, fn) in enumerate(tools, start=1):
         module_started = time.monotonic()
+        noise = ""
         try:
-            findings = fn(domain) or []
+            with _quiet_module_output() as held:
+                findings = fn(domain) or []
+            noise = held.text
         except Exception as exc:  # noqa: BLE001 — one module must not end the scan
             _module_line(
                 name, index=index, total=len(tools),
@@ -508,6 +591,7 @@ def _run_scan(args: argparse.Namespace) -> tuple[dict, int]:
             elapsed=time.monotonic() - module_started,
             findings=len(findings) if ran else 0,
             skipped=not ran and bool(findings),
+            noise=len([line for line in noise.splitlines() if line.strip()]),
         )
         tool_results[name] = {
             "findings": len(findings),
@@ -682,6 +766,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _ui["quiet"] = bool(args.quiet)
     _ui["no_banner"] = bool(args.no_banner)
+    _ui["verbose"] = bool(args.verbose)
     _quiet_library_logging(bool(args.verbose))
     if args.no_color:
         _ui["color"] = False
