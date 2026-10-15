@@ -91,7 +91,38 @@ def run_whois(target: str) -> list[dict]:
             if formatted:
                 evidence_lines.append(f"{label}: {formatted}")
 
-        evidence = "\n".join(evidence_lines) or "No WHOIS data returned."
+        # python-whois swallows a failed socket connection, logs it to its own
+        # logger, and hands back a record whose every field is None. That is
+        # indistinguishable here from a registry that answered with nothing,
+        # and reporting it as a successful lookup with empty evidence is the
+        # failure this project exists to avoid: a check that did not run must
+        # say so rather than produce a finding shaped like a result.
+        if not evidence_lines:
+            return [{
+                "tool": "whois",
+                "category": "scanner_coverage",
+                "severity": "info",
+                "title": f"WHOIS Lookup Returned No Data - {domain}",
+                "description": (
+                    "The WHOIS query completed without returning a single field. "
+                    "That usually means the registry refused the query, rate-limited "
+                    "it, or could not be reached - not that the domain is "
+                    "unregistered. Registration details for this target were not "
+                    "examined."
+                ),
+                "evidence": (
+                    f"Queried: {domain}\n"
+                    "Fields returned: none\n"
+                    "Registrar, dates, name servers and registrant country are all absent."
+                ),
+                "remediation": (
+                    "Confirm outbound WHOIS (TCP 43) and RDAP are permitted from this "
+                    "host, then retry. Some TLD registries answer only over RDAP or "
+                    "rate-limit by source address."
+                ),
+            }]
+
+        evidence = "\n".join(evidence_lines)
         severity = "info"
         remediation = None
         expiry = _expiry_datetime(record.expiration_date)
