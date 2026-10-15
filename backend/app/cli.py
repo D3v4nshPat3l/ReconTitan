@@ -120,6 +120,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-banner", action="store_true", help="Skip the launch banner",
     )
     output.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="Show library log output. Useful when a module fails and you want the cause.",
+    )
+    output.add_argument(
         "--list-modules", action="store_true",
         help="List available modules and profiles, then exit",
     )
@@ -169,6 +173,52 @@ def _apply_overrides(args: argparse.Namespace) -> None:
     # hand the job to and nobody to poll for it.
     overrides.setdefault("ASYNC_SCANS_ENABLED", "false")
     os.environ.update(overrides)
+
+
+def _is_scanner_notice(finding: dict) -> bool:
+    """True for findings that describe the scanner rather than the target.
+
+    Shares its rule with the AI layer, which already had to make this
+    distinction for the same reason: a notice about a missing binary is not an
+    observation about the host being scanned.
+    """
+    title = str(finding.get("title", ""))
+    if "Not Installed" in title or "Did Not Run" in title or "Skipped" in title:
+        return True
+    return str(finding.get("category", "")) == "scanner_coverage"
+
+
+def _quiet_library_logging(verbose: bool) -> None:
+    """Keep third-party loggers out of the aligned module rows.
+
+    The scan output is a table, and a table only reads as one while every row
+    starts in the same column. Libraries do not know that: python-whois logs a
+    failed socket at ERROR, dnspython and urllib3 chatter at WARNING, and each
+    line lands mid-table with its own timestamp format. The information is not
+    lost -- a module that fails still reports its own failure in the row and
+    in the coverage table, which is the project's rule anyway, and --verbose
+    puts every logger back.
+    """
+    import logging
+
+    if verbose:
+        logging.basicConfig(
+            level=logging.INFO, stream=sys.stderr,
+            format="%(asctime)s %(name)s %(levelname)s %(message)s",
+        )
+        return
+
+    # Handlers, not levels. Raising a logger's level filters the record at
+    # source, which silences it for everything downstream -- including a test
+    # harness or an embedder that attached its own handler to capture it. What
+    # this actually needs is narrower: stop records reaching stderr. Replacing
+    # the root handlers does that and leaves every level untouched, so anything
+    # that wants the records can still have them.
+    #
+    # force=True drops handlers a library installed during import, and leaving
+    # a NullHandler behind means a later basicConfig() call becomes a no-op
+    # rather than re-attaching stderr.
+    logging.basicConfig(handlers=[logging.NullHandler()], force=True)
 
 
 def _use_utf8_streams() -> None:
@@ -240,7 +290,7 @@ def _progress(message: str, *, quiet: bool | None = None) -> None:
 
 
 def _module_line(name: str, *, index: int, total: int, elapsed: float,
-                 findings: int = 0, error: str = "") -> None:
+                 findings: int = 0, error: str = "", skipped: bool = False) -> None:
     """One aligned row per module, with its own outcome.
 
     The alignment is the point. A scan runs thirty modules and the operator is
@@ -253,6 +303,8 @@ def _module_line(name: str, *, index: int, total: int, elapsed: float,
     position = t.s(f"[{index:>2}/{total}]", "dim", "grey")
     if error:
         glyph, colour, detail = t.g("fail"), "red", error
+    elif skipped:
+        glyph, colour, detail = t.g("skip"), "yellow", "did not run"
     elif findings:
         glyph, colour, detail = t.g("ok"), "green", f"{findings} finding(s)"
     else:
@@ -444,11 +496,23 @@ def _run_scan(args: argparse.Namespace) -> tuple[dict, int]:
             )
             tool_results[name] = {"findings": 0, "status": f"error: {type(exc).__name__}"}
             continue
+        # A module whose only output describes the scanner -- "not installed",
+        # "did not run", a coverage notice -- did not examine the target. The
+        # coverage table exists to tell those apart from a module that ran and
+        # found nothing, and counting the notice as a finding defeats it: the
+        # earlier output showed "subfinder  1 finding(s)" with a tick beside a
+        # module that was never on the host.
+        ran = any(not _is_scanner_notice(f) for f in findings)
         _module_line(
             name, index=index, total=len(tools),
-            elapsed=time.monotonic() - module_started, findings=len(findings),
+            elapsed=time.monotonic() - module_started,
+            findings=len(findings) if ran else 0,
+            skipped=not ran and bool(findings),
         )
-        tool_results[name] = {"findings": len(findings), "status": "ok"}
+        tool_results[name] = {
+            "findings": len(findings),
+            "status": "ok" if ran else "did not examine the target",
+        }
         all_findings.extend(findings)
 
     if danger_session is not None:
@@ -618,6 +682,7 @@ def main(argv: list[str] | None = None) -> int:
 
     _ui["quiet"] = bool(args.quiet)
     _ui["no_banner"] = bool(args.no_banner)
+    _quiet_library_logging(bool(args.verbose))
     if args.no_color:
         _ui["color"] = False
 

@@ -207,8 +207,14 @@ def render_text_report(report: dict) -> str:
                 count, status = len(result), ""
             else:
                 count, status = result, ""
-            suffix = f"  [{status}]" if status else ""
-            lines.append(f"  {name:<24} {count} finding(s){suffix}")
+            if status.startswith("did not examine"):
+                # Its findings describe the scanner, not the target. Printing a
+                # count here put a number beside a module that never ran.
+                lines.append(f"  {name:<24} did not run — see its notice above")
+            elif status.startswith("error"):
+                lines.append(f"  {name:<24} failed — {status.split(':', 1)[-1].strip()}")
+            else:
+                lines.append(f"  {name:<24} {count} finding(s)")
         lines.append("")
 
     lines += [

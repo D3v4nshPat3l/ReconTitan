@@ -388,7 +388,7 @@ def _coverage(t: Theme, report: dict) -> list[str]:
     out.append("")
 
     name_w = max((len(name) for name in results), default=10)
-    ok, failed, empty = [], [], []
+    ok, failed, empty, skipped = [], [], [], []
     for name in sorted(results):
         result = results[name]
         if isinstance(result, dict):
@@ -401,6 +401,11 @@ def _coverage(t: Theme, report: dict) -> list[str]:
         row = (name, count, status)
         if status.startswith("error"):
             failed.append(row)
+        elif status.startswith("did not examine"):
+            # Ran, but only reported on itself. Distinct from both "found
+            # nothing" and "failed", and the distinction is the whole point
+            # of this table.
+            skipped.append(row)
         elif count:
             ok.append(row)
         else:
@@ -409,10 +414,16 @@ def _coverage(t: Theme, report: dict) -> list[str]:
     for rows, glyph, colour, note in (
         (ok, "ok", "green", ""),
         (empty, "skip", "grey", "no findings"),
+        (skipped, "skip", "yellow", "did not run — see its notice"),
         (failed, "fail", "red", ""),
     ):
         for name, count, status in rows:
-            detail = status if status.startswith("error") else (note or f"{count} finding(s)")
+            if status.startswith("error"):
+                detail = status
+            elif note:
+                detail = note
+            else:
+                detail = f"{count} finding(s)"
             out.append(
                 f"  {t.s(t.g(glyph), colour)} {name.ljust(name_w)}   "
                 f"{t.s(detail, colour if colour != 'green' else 'white')}"
